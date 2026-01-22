@@ -1,0 +1,33 @@
+# Typst compiled outputs
+*.pdf
+
+# Typst cache
+.typst-cache/
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Rust build artifacts
+**/target/
+**/Cargo.lock
+
+# Test and experimental files
+test-*.typ
+demo-*.typ
+block-trails.typ
+export.typ
+try-*.typ
+sysml-block.typ
+traceability-graph.typ
+
+# Local configuration
+.claude/
