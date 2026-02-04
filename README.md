@@ -1,7 +1,5 @@
 # AssemblyLine Modelling Language
 
-EXPERIMENTAL
-
 A text-based modelling language for systems engineering and product-line engineering, implemented as a Typst library.
 
 ## Overview

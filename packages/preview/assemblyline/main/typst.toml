@@ -1,0 +1,11 @@
+[package]
+name = "assemblyline"
+version = "0.1.0"
+entrypoint = "lib/lib.typ"
+authors = ["AssemblyLine Contributors"]
+license = "MIT"
+description = "A domain-specific language for product-line engineering specifications and traceability modeling in Typst"
+homepage = "https://github.com/yourusername/assemblyline"
+repository = "https://github.com/yourusername/assemblyline"
+keywords = ["product-line", "engineering", "specifications", "traceability", "sysml"]
+categories = ["library"]

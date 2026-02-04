@@ -20,14 +20,6 @@ Thumbs.db
 **/target/
 **/Cargo.lock
 
-# Test and experimental files
-test-*.typ
-demo-*.typ
-block-trails.typ
-export.typ
-try-*.typ
-sysml-block.typ
-traceability-graph.typ
 
 # Local configuration
 .claude/
