@@ -2,7 +2,8 @@
 // Simple diagram functions using diagramgrid
 // Provides simplified SysML Internal Block Diagrams showing parts composition
 
-#import "@local/diagramgrid:0.1.0": dg-rect, dg-flex
+//#import "@local/diagramgrid:0.1.0": dg-rect, dg-flex
+#import "@preview/facade:0.1.0": dg-rect, dg-flex
 
 // Helper: Extract parts from registry element
 // Works with both internal_block_diagram (ibd-parts) and block_definition (sysml-parts)
