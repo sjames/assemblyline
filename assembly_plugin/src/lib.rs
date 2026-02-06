@@ -9,6 +9,11 @@ initiate_protocol!();
 mod types;
 use types::{Element, FeatureElement};
 
+// Import SAT solver and feature model validation
+mod sat_solver;
+mod feature_validation;
+use feature_validation::{validate_feature_model, validate_configuration};
+
 /// Registry - maps element ID to Element
 pub type Registry = HashMap<String, Element>;
 
@@ -216,6 +221,28 @@ pub fn validate_rules(input_bytes: &[u8]) -> Vec<u8> {
         }
     }
 
+    // Rule 5: Validate feature model consistency using SAT solver
+    // Find root feature (feature with no parent or parent = "ROOT")
+    let root_features: Vec<_> = input
+        .registry
+        .values()
+        .filter_map(|e| e.as_feature())
+        .filter(|f| f.parent.is_none() || f.parent.as_deref() == Some("ROOT"))
+        .collect();
+
+    if !root_features.is_empty() {
+        // Use first root feature found (typically there should be only one)
+        let root_id = root_features[0].id.clone();
+        let fm_validation = validate_feature_model(&input.registry, &root_id);
+
+        if !fm_validation.is_consistent {
+            violations.push(format!(
+                "Feature model is INCONSISTENT (SAT check failed): {}",
+                fm_validation.message
+            ));
+        }
+    }
+
     let result = ValidationResult {
         passed: violations.is_empty(),
         total_elements: input.registry.len(),
@@ -241,4 +268,181 @@ pub fn validate_rules(input_bytes: &[u8]) -> Vec<u8> {
 #[wasm_func]
 pub fn hello() -> Vec<u8> {
     b"Hello from AssemblyLine WASM validator!".to_vec()
+}
+
+// ============================================================================
+// Feature Model SAT Validation (WASM Export)
+// ============================================================================
+
+/// Result structure for feature model validation
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FeatureModelValidationResult {
+    pub is_consistent: bool,
+    pub message: String,
+    pub num_features: usize,
+    pub num_clauses: usize,
+    pub details: String,
+}
+
+/// Validate feature model consistency using SAT solver
+///
+/// This checks if the feature model has at least one valid configuration
+/// by encoding all constraints (hierarchy, variability groups, requires/excludes)
+/// as a SAT problem.
+///
+/// # Input JSON Format
+/// ```json
+/// {
+///   "registry": { ... },
+///   "root_feature_id": "ROOT"
+/// }
+/// ```
+///
+/// # Output JSON Format
+/// ```json
+/// {
+///   "is_consistent": true,
+///   "message": "Feature model is CONSISTENT",
+///   "num_features": 10,
+///   "num_clauses": 25,
+///   "details": "..."
+/// }
+/// ```
+#[wasm_func]
+pub fn validate_feature_model_sat(input_bytes: &[u8]) -> Vec<u8> {
+    #[derive(Deserialize)]
+    struct Input {
+        registry: Registry,
+        #[serde(default = "default_root")]
+        root_feature_id: String,
+    }
+
+    fn default_root() -> String {
+        "ROOT".to_string()
+    }
+
+    // Parse input
+    let input: Input = match serde_json::from_slice(input_bytes) {
+        Ok(data) => data,
+        Err(e) => {
+            let error_result = FeatureModelValidationResult {
+                is_consistent: false,
+                message: format!("Failed to parse input: {}", e),
+                num_features: 0,
+                num_clauses: 0,
+                details: String::new(),
+            };
+            return serde_json::to_vec(&error_result).unwrap_or_default();
+        }
+    };
+
+    // Run feature model validation
+    let validation = validate_feature_model(&input.registry, &input.root_feature_id);
+
+    let result = FeatureModelValidationResult {
+        is_consistent: validation.is_consistent,
+        message: validation.message.clone(),
+        num_features: validation.num_features,
+        num_clauses: validation.num_clauses,
+        details: if validation.is_consistent {
+            format!(
+                "✓ Feature model is consistent - at least one valid configuration exists\n\
+                 Features: {}\n\
+                 SAT variables: {}\n\
+                 CNF clauses: {}",
+                validation.num_features,
+                validation.num_features, // approximate
+                validation.num_clauses
+            )
+        } else {
+            format!(
+                "✗ Feature model is INCONSISTENT - contradictory constraints detected\n\
+                 No valid configuration exists that satisfies all:\n\
+                 - Hierarchy constraints (parent-child relationships)\n\
+                 - Variability groups (XOR/OR groups)\n\
+                 - Cross-tree constraints (requires/excludes)\n\n\
+                 Features: {}\n\
+                 CNF clauses: {}\n\n\
+                 Recommendation: Review feature constraints for conflicts",
+                validation.num_features,
+                validation.num_clauses
+            )
+        },
+    };
+
+    serde_json::to_vec(&result).unwrap_or_default()
+}
+
+/// Validate a specific configuration against the feature model
+///
+/// # Input JSON Format
+/// ```json
+/// {
+///   "registry": { ... },
+///   "root_feature_id": "ROOT",
+///   "selected_features": ["F1", "F2", "F3"]
+/// }
+/// ```
+#[wasm_func]
+pub fn validate_configuration_sat(input_bytes: &[u8]) -> Vec<u8> {
+    #[derive(Deserialize)]
+    struct Input {
+        registry: Registry,
+        #[serde(default = "default_root")]
+        root_feature_id: String,
+        selected_features: Vec<String>,
+    }
+
+    fn default_root() -> String {
+        "ROOT".to_string()
+    }
+
+    // Parse input
+    let input: Input = match serde_json::from_slice(input_bytes) {
+        Ok(data) => data,
+        Err(e) => {
+            let error_result = FeatureModelValidationResult {
+                is_consistent: false,
+                message: format!("Failed to parse input: {}", e),
+                num_features: 0,
+                num_clauses: 0,
+                details: String::new(),
+            };
+            return serde_json::to_vec(&error_result).unwrap_or_default();
+        }
+    };
+
+    // Validate configuration
+    let (is_valid, message) = validate_configuration(
+        &input.registry,
+        &input.root_feature_id,
+        &input.selected_features,
+    );
+
+    let result = FeatureModelValidationResult {
+        is_consistent: is_valid,
+        message,
+        num_features: input.selected_features.len(),
+        num_clauses: 0,
+        details: if is_valid {
+            format!(
+                "✓ Configuration is valid\n\
+                 Selected features: {:?}",
+                input.selected_features
+            )
+        } else {
+            format!(
+                "✗ Configuration violates feature model constraints\n\
+                 Selected features: {:?}\n\n\
+                 Possible issues:\n\
+                 - Missing required features\n\
+                 - Conflicting features (excludes constraint)\n\
+                 - Violates XOR/OR group rules\n\
+                 - Selected feature without parent",
+                input.selected_features
+            )
+        },
+    };
+
+    serde_json::to_vec(&result).unwrap_or_default()
 }
