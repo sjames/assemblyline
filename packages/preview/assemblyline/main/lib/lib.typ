@@ -400,42 +400,28 @@
   }
 }
 
-// Render a feature tree node with requirements
-#let __render-tree-node-with-requirements(feature, registry, all-links, selected, depth) = {
-  let indent = "  " * depth
+// Helper function to build feature path from a feature to root
+#let __build-feature-path(feature-id, registry) = {
+  let path = ()
+  let current-id = feature-id
+
+  // Traverse up to root
+  while current-id != none {
+    let feat = registry.at(current-id, default: none)
+    if feat == none { break }
+
+    // Add to path (will reverse later)
+    path.push((id: feat.id, title: feat.title))
+    current-id = feat.parent
+  }
+
+  // Reverse to get root-to-leaf order
+  path.rev()
+}
+
+// Render requirements as cards with feature hierarchy headers
+#let __render-requirements-as-cards(feature, registry, all-links, selected, depth) = {
   let is-selected = selected.contains(feature.id)
-
-  // Determine node symbols and styling
-  let group-symbol = if feature.group == "XOR" {
-    "⊕"
-  } else if feature.group == "OR" {
-    "⊙"
-  } else {
-    "●"
-  }
-
-  let concrete-marker = if feature.concrete == false {
-    " (abstract)"
-  } else {
-    ""
-  }
-
-  // Style based on selection
-  let node-content = if is-selected {
-    text(fill: green.darken(20%), weight: "bold")[
-      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
-    ]
-  } else {
-    text(fill: gray)[
-      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
-    ]
-  }
-
-  // Render this node
-  [#indent#node-content\ ]
-
-  // Find and render requirements that belong to this feature
-  // Only show requirements if the feature is selected (or if no configuration is active)
   let show-requirements = is-selected or selected.len() == 0
 
   if show-requirements {
@@ -443,31 +429,77 @@
       .filter(link => link.type == "belongs_to" and link.target == feature.id)
       .map(link => link.source)
 
-    if feature-reqs.len() > 0 {
-      let req-indent = "  " * (depth + 1)
-      for req-id in feature-reqs {
-        let req = registry.at(req-id, default: none)
-        if req != none and req.type == "req" {
-          // Create a labeled requirement using figure for proper anchoring
-          [#figure(
-            kind: "requirement",
-            supplement: [],
-            numbering: _ => [],  // No visible numbering
-            gap: 0pt,
-            text(fill: blue.darken(10%), size: 0.9em, weight: "bold")[#req-indent→ #req-id:] + " " + text(fill: blue.darken(20%), size: 0.85em)[#req.body]
-          ) #label(req-id) #v(-0.5em)]
-        }
+    for req-id in feature-reqs {
+      let req = registry.at(req-id, default: none)
+      if req != none and req.type == "req" {
+        // Build feature path for this requirement
+        let feature-path = __build-feature-path(feature.id, registry)
+
+        // Create requirement card with feature hierarchy header
+        v(0.5em)
+        [#figure(
+          kind: "requirement",
+          supplement: [],
+          numbering: _ => [],
+          gap: 0pt,
+          block(
+            width: 100%,
+            fill: rgb("#f8f9fa"),
+            stroke: (left: 3pt + rgb("#4a90e2"), rest: 0.5pt + rgb("#dee2e6")),
+            radius: 4pt,
+            inset: 0pt,
+            breakable: false
+          )[
+            // Feature path header
+            #block(
+              width: 100%,
+              fill: rgb("#e8f4f8"),
+              inset: (left: 0.8em, right: 0.8em, top: 0.4em, bottom: 0.4em),
+              radius: (top: 4pt, bottom: 0pt)
+            )[
+              #align(left)[
+                #text(size: 0.75em, fill: rgb("#6c757d"), weight: "regular")[
+                  #feature-path.map(f => {
+                    if f.title != "" { f.title } else { f.id }
+                  }).join(" » ")
+                ]
+              ]
+            ]
+
+            // Requirement content
+            #block(
+              width: 100%,
+              inset: (left: 0.8em, right: 0.8em, top: 0.2em, bottom: 0.5em)
+            )[
+              #align(left)[
+                // Requirement ID badge (top left)
+                #box(
+                  fill: rgb("#ffffff"),
+                  stroke: 1pt + rgb("#4a90e2"),
+                  inset: (left: 0.4em, right: 0.4em, top: 0.2em, bottom: 0.2em),
+                  radius: 3pt
+                )[
+                  #text(fill: rgb("#2c5aa0"), size: 0.75em, weight: "bold")[#req-id]
+                ]
+
+                // Requirement text (new line below)
+                #v(0.35em)
+                #text(fill: black, size: 0.9em)[#req.body]
+              ]
+            ]
+          ]
+        ) #label(req-id)]
       }
     }
   }
 
-  // Find and render children features
+  // Recurse to children
   let children = registry.pairs()
     .filter(p => p.last().type == "feature" and p.last().parent == feature.id)
     .map(p => p.last())
 
   for child in children {
-    __render-tree-node-with-requirements(child, registry, all-links, selected, depth + 1)
+    __render-requirements-as-cards(child, registry, all-links, selected, depth + 1)
   }
 }
 
@@ -527,41 +559,56 @@
   // Render header (non-breakable)
   block(
     width: 100%,
-    fill: luma(245),
-    inset: 1em,
+    fill: rgb("#e8f4f8"),
+    inset: 1.2em,
     radius: 4pt,
-    stroke: 1pt + luma(200)
+    stroke: 2pt + rgb("#4a90e2")
   )[
     #heading(level: level)[Feature Tree with Requirements]
-    #if cfg-id != none [
-      *Configuration:* #cfg-id \
-      *Selected features:* #selected.len() of #registry.pairs().filter(p => p.last().type == "feature").len() \
-      *Top-level requirements:* #total-reqs
-    ]
-    #if cfg-id == none [
-      _(No active configuration – showing all features)_ \
-      *Top-level requirements:* #total-reqs
-    ]
+    #v(0.3em)
+    #grid(
+      columns: (auto, 1fr),
+      gutter: 1em,
+      [
+        #if cfg-id != none [
+          #text(size: 0.9em)[
+            *Configuration:* #text(fill: rgb("#2c5aa0"), weight: "bold")[#cfg-id] \
+            *Selected features:* #text(fill: green.darken(30%), weight: "bold")[#selected.len()] of #registry.pairs().filter(p => p.last().type == "feature").len() \
+            *Top-level requirements:* #text(fill: rgb("#2c5aa0"), weight: "bold")[#total-reqs]
+          ]
+        ]
+        #if cfg-id == none [
+          #text(size: 0.9em)[
+            _(No active configuration – showing all features)_ \
+            *Top-level requirements:* #text(fill: rgb("#2c5aa0"), weight: "bold")[#total-reqs]
+          ]
+        ]
+      ],
+      []
+    )
   ]
 
-  v(0.5em)
+  v(0.7em)
 
-  // Render tree content (breakable across pages)
-  text(font: "Courier New", size: 0.9em)[
-    #__render-tree-node-with-requirements(root-feature, registry, all-links, selected, 0)
-  ]
+  // Render requirements as cards with feature hierarchy
+  __render-requirements-as-cards(root-feature, registry, all-links, selected, 0)
 
-  v(0.5em)
+  v(0.7em)
 
   // Render legend (non-breakable)
   block(
     width: 100%,
-    fill: luma(250),
-    inset: 0.5em,
-    radius: 3pt
+    fill: rgb("#f8f9fa"),
+    inset: 0.8em,
+    radius: 3pt,
+    stroke: 0.5pt + rgb("#dee2e6")
   )[
-    #text(size: 0.85em, fill: gray)[
-      *Legend:* ● Feature | ⊕ XOR Group | ⊙ OR Group | → Requirement | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected]
+    #text(size: 0.85em)[
+      *Layout:* Requirements are displayed as cards with their feature hierarchy shown in the header.
+      The path shows the full context: #text(style: "italic", fill: rgb("#6c757d"))[Root » Parent » Feature].
+      #if selected.len() > 0 [
+        Only requirements from #text(fill: green.darken(30%), weight: "bold")[selected features] are shown.
+      ]
     ]
   ]
 }
