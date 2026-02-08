@@ -1,7 +1,9 @@
 /// Parameter Validation Module
 /// Validates parameter bindings for configurations against feature parameter schemas
 
-use crate::types::{Element, FeatureElement, ConfigElement, ParameterSchema};
+use crate::constraint_evaluator::evaluate_constraint;
+use crate::constraint_parser::parse_constraint;
+use crate::types::{ConfigElement, Element, FeatureElement, ParameterSchema};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -103,11 +105,55 @@ pub fn validate_parameter_bindings(
         }
     }
 
+    // Check constraints for each selected feature
+    for feature_id in &config.selected {
+        let feature = match registry.get(feature_id) {
+            Some(Element::Feature(f)) => f,
+            _ => continue,
+        };
+
+        // Check constraints if any
+        if let Some(constraints) = &feature.constraints {
+            for constraint_str in constraints {
+                // Parse constraint
+                let expr = match parse_constraint(constraint_str) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        errors.push(format!(
+                            "Feature '{}': Failed to parse constraint '{}': {}",
+                            feature_id, constraint_str, e
+                        ));
+                        continue;
+                    }
+                };
+
+                // Evaluate constraint
+                match evaluate_constraint(&expr, config, registry) {
+                    Ok(true) => {
+                        // Constraint satisfied
+                    }
+                    Ok(false) => {
+                        errors.push(format!(
+                            "Feature '{}': Constraint '{}' violated",
+                            feature_id, constraint_str
+                        ));
+                    }
+                    Err(e) => {
+                        errors.push(format!(
+                            "Feature '{}': Failed to evaluate constraint '{}': {}",
+                            feature_id, constraint_str, e
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     // Generate result
     let is_valid = errors.is_empty();
     let message = if is_valid {
         format!(
-            "All parameter bindings are valid ({} features, {} parameters checked)",
+            "All parameter bindings and constraints are valid ({} features, {} parameters checked)",
             num_features_checked, num_parameters_checked
         )
     } else {

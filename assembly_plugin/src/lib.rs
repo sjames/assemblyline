@@ -13,6 +13,8 @@ use types::{Element, FeatureElement};
 mod sat_solver;
 mod feature_validation;
 mod parameter_validation;
+mod constraint_parser;
+mod constraint_evaluator;
 use feature_validation::{validate_feature_model, validate_configuration};
 use parameter_validation::validate_parameter_bindings;
 
