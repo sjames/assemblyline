@@ -95,6 +95,117 @@
   }
 }
 
+// Validate parameter bindings for a configuration
+// Call this function after all elements are registered to check parameter integrity
+#let validate-parameter-bindings(config-id) = context {
+  let registry = __registry.get()
+  let config-key = "CONFIG:" + config-id
+  let violations = ()
+
+  // Check if config exists
+  if config-key not in registry {
+    panic("Configuration '" + config-id + "' does not exist")
+  }
+
+  let config = registry.at(config-key)
+  let bindings = config.at("bindings", default: (:))
+  let selected = config.at("selected", default: ())
+
+  // Check each selected feature
+  for feature-id in selected {
+    // Check if feature exists
+    if feature-id not in registry {
+      violations.push("Configuration '" + config-id + "' selects non-existent feature '" + feature-id + "'")
+      continue
+    }
+
+    let feature = registry.at(feature-id)
+    let parameters = feature.at("parameters", default: none)
+
+    // Skip if feature has no parameters
+    if parameters == none or parameters == (:) {
+      continue
+    }
+
+    // Get bindings for this feature
+    let feature-bindings = bindings.at(feature-id, default: (:))
+
+    // Check each parameter in the schema
+    for (param-name, param-schema) in parameters {
+      let bound-value = feature-bindings.at(param-name, default: none)
+      let default-value = param-schema.at("default", default: none)
+
+      // If no binding and no default, that's an error
+      if bound-value == none and default-value == none {
+        violations.push(
+          "Feature '" + feature-id + "', parameter '" + param-name + "': " +
+          "No binding provided and no default value defined"
+        )
+        continue
+      }
+
+      // Use binding if provided, otherwise use default
+      let value = if bound-value != none { bound-value } else { default-value }
+
+      // Validate type
+      let param-type = param-schema.at("type")
+
+      if param-type == "Integer" {
+        if type(value) != int {
+          violations.push(
+            "Feature '" + feature-id + "', parameter '" + param-name + "': " +
+            "Expected type Integer, got " + str(type(value))
+          )
+          continue
+        }
+
+        // Validate range if specified
+        let range = param-schema.at("range", default: none)
+        if range != none {
+          let (min-val, max-val) = range
+          if value < min-val or value > max-val {
+            violations.push(
+              "Feature '" + feature-id + "', parameter '" + param-name + "': " +
+              "Value " + str(value) + " out of range [" + str(min-val) + ", " + str(max-val) + "]"
+            )
+          }
+        }
+      } else if param-type == "Boolean" {
+        if type(value) != bool {
+          violations.push(
+            "Feature '" + feature-id + "', parameter '" + param-name + "': " +
+            "Expected type Boolean, got " + str(type(value))
+          )
+        }
+      } else if param-type == "Enum" {
+        // Check if value is string
+        if type(value) != str {
+          violations.push(
+            "Feature '" + feature-id + "', parameter '" + param-name + "': " +
+            "Expected type String (for Enum), got " + str(type(value))
+          )
+          continue
+        }
+
+        // Check if value is in allowed values
+        let values = param-schema.at("values", default: ())
+        if value not in values {
+          violations.push(
+            "Feature '" + feature-id + "', parameter '" + param-name + "': " +
+            "Value '" + value + "' not in enum " + repr(values)
+          )
+        }
+      }
+    }
+  }
+
+  // Report violations
+  if violations.len() > 0 {
+    let msg = "Parameter validation failed with " + str(violations.len()) + " error(s):\n" + violations.join("\n")
+    panic(msg)
+  }
+}
+
 // Get all links for a specific element (by source)
 // NOTE: This function must be called from within a context block
 #let __get-links(element-id) = {
@@ -121,7 +232,8 @@
 // Register element silently
 #let __element(
   type, id, title: "", tags: (:), links: (:),
-  parent: none, concrete: none, group: none, body: none
+  parent: none, concrete: none, group: none, body: none,
+  parameters: none, constraints: none, requires: none
 ) = {
   context {
     let registry = __registry.get()
@@ -142,7 +254,10 @@
         parent: parent,
         concrete: concrete,
         group: group,
-        body: body
+        body: body,
+        parameters: parameters,
+        constraints: constraints,
+        requires: requires
       ))
       r
     })
@@ -156,11 +271,14 @@
 #let feature(title, ..args) = {
   let named = args.named()
   let body  = __body(args)
-  let id       = named.at("id")
-  let tags     = named.at("tags", default: (:))
-  let parent   = named.at("parent", default: none)
-  let concrete = named.at("concrete", default: true)
-  let group    = named.at("group", default: none)
+  let id         = named.at("id")
+  let tags       = named.at("tags", default: (:))
+  let parent     = named.at("parent", default: none)
+  let concrete   = named.at("concrete", default: true)
+  let group      = named.at("group", default: none)
+  let parameters = named.at("parameters", default: none)
+  let constraints = named.at("constraints", default: none)
+  let requires   = named.at("requires", default: none)
 
   __element("feature", id,
     title: title,
@@ -169,7 +287,10 @@
     parent: parent,
     concrete: concrete,
     group: group,
-    body: body
+    body: body,
+    parameters: parameters,
+    constraints: constraints,
+    requires: requires
   )
 }
 
@@ -328,7 +449,7 @@
 // NOTE: #links() function removed - links are now passed as parameters to elements
 
 // #config
-#let config(id, title: "", root_feature_id: "ROOT", selected: (), tags: (:)) = {
+#let config(id, title: "", root_feature_id: "ROOT", selected: (), bindings: (:), tags: (:)) = {
   context {
     let registry = __registry.get()
     let config-key = "CONFIG:" + id
@@ -345,6 +466,7 @@
         title: title,
         root: root_feature_id,
         selected: selected,
+        bindings: bindings,
         tags: tags
       ))
       r

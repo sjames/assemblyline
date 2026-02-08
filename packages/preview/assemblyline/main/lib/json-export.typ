@@ -17,11 +17,43 @@
       "\"type\": " + to-json-value(elem.type),
       "\"title\": " + to-json-value(elem.title),
       "\"tags\": " + to-json-value(elem.tags),
-      "\"links\": " + to-json-value(elem.links),
-      "\"parent\": " + to-json-value(elem.parent),
-      "\"concrete\": " + to-json-value(elem.concrete),
-      "\"group\": " + to-json-value(elem.group),
     )
+
+    // Add optional fields if present
+    if elem.at("parent", default: none) != none {
+      obj.push("\"parent\": " + to-json-value(elem.parent))
+    }
+    if elem.at("concrete", default: none) != none {
+      obj.push("\"concrete\": " + to-json-value(elem.concrete))
+    }
+    if elem.at("group", default: none) != none {
+      obj.push("\"group\": " + to-json-value(elem.group))
+    }
+
+    // Add parameter-related fields if present
+    if elem.at("parameters", default: none) != none {
+      obj.push("\"parameters\": " + to-json-value(elem.parameters))
+    }
+    if elem.at("constraints", default: none) != none {
+      obj.push("\"constraints\": " + to-json-value(elem.constraints))
+    }
+    if elem.at("requires", default: none) != none {
+      obj.push("\"requires\": " + to-json-value(elem.requires))
+    }
+
+    // Add configuration-specific fields
+    if elem.type == "config" {
+      if elem.at("root", default: none) != none {
+        obj.push("\"root\": " + to-json-value(elem.root))
+      }
+      if elem.at("selected", default: none) != none {
+        obj.push("\"selected\": " + to-json-value(elem.selected))
+      }
+      if elem.at("bindings", default: none) != none {
+        obj.push("\"bindings\": " + to-json-value(elem.bindings))
+      }
+    }
+
     elements.push("{" + obj.join(", ") + "}")
   }
 
