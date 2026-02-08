@@ -1620,6 +1620,9 @@
 // Re-export simple diagram functions
 #import "simple-diagrams.typ": simple-ibd
 
+// Import feature model visualization
+#import "feature-diagram.typ": feature-model-diagram
+
 // Import validation module with plugin support
 #import "validation.typ": (
   plugin-available,
