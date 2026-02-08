@@ -96,3 +96,28 @@
     )
   }
 }
+
+/// Validate parameter bindings using the WASM plugin
+///
+/// Validates that all parameter bindings in a configuration match their schemas
+/// (type checking, range validation, enum membership, defaults)
+///
+/// Returns a validation result with fields: is_valid, message, errors, num_features_checked, num_parameters_checked
+#let validate-parameters-wasm(registry: (:), config-id: "") = {
+  let input = (
+    registry: registry,
+    config_id: config-id,
+  )
+
+  // Serialize to JSON and convert to bytes
+  let input-json = json.encode(input)
+  let input-bytes = bytes(input-json)
+
+  // Call the validate_parameters function in the WASM plugin
+  let result-bytes = __validation-plugin.validate_parameters(input-bytes)
+
+  // Decode the result
+  let result = json.decode(str(result-bytes))
+
+  result
+}

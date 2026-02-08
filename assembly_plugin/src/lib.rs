@@ -12,7 +12,9 @@ use types::{Element, FeatureElement};
 // Import SAT solver and feature model validation
 mod sat_solver;
 mod feature_validation;
+mod parameter_validation;
 use feature_validation::{validate_feature_model, validate_configuration};
+use parameter_validation::validate_parameter_bindings;
 
 /// Registry - maps element ID to Element
 pub type Registry = HashMap<String, Element>;
@@ -443,6 +445,41 @@ pub fn validate_configuration_sat(input_bytes: &[u8]) -> Vec<u8> {
             )
         },
     };
+
+    serde_json::to_vec(&result).unwrap_or_default()
+}
+
+
+// ============================================================================
+// Parameter Validation (WASM Export) - Phase 3
+// ============================================================================
+
+/// Input for parameter validation
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ParameterValidationInput {
+    pub registry: Registry,
+    pub config_id: String,
+}
+
+#[wasm_func]
+pub fn validate_parameters(input_bytes: &[u8]) -> Vec<u8> {
+    // Parse input
+    let input: ParameterValidationInput = match serde_json::from_slice(input_bytes) {
+        Ok(data) => data,
+        Err(e) => {
+            let error_result = parameter_validation::ParameterValidationResult {
+                is_valid: false,
+                message: format!("Failed to parse input: {}", e),
+                errors: vec![format!("JSON parse error: {}", e)],
+                num_features_checked: 0,
+                num_parameters_checked: 0,
+            };
+            return serde_json::to_vec(&error_result).unwrap_or_default();
+        }
+    };
+
+    // Validate parameters
+    let result = validate_parameter_bindings(&input.registry, &input.config_id);
 
     serde_json::to_vec(&result).unwrap_or_default()
 }

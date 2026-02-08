@@ -370,6 +370,9 @@ mod tests {
             concrete,
             group: group.map(|s| s.to_string()),
             body: serde_json::Value::Null,
+            parameters: None,
+            constraints: None,
+            requires: None,
         }
     }
 

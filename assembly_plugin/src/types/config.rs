@@ -17,6 +17,9 @@ pub struct ConfigElement {
     pub selected: Vec<String>,
     #[serde(default)]
     pub body: serde_json::Value,
+    /// Parameter bindings: feature_id -> (param_name -> value)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bindings: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
 }
 
 impl ConfigElement {

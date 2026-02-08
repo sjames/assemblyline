@@ -17,7 +17,7 @@ pub use diagram::{
     ImplementationElement, InternalBlockDiagramElement, SequenceDiagramElement, TestCaseElement,
 };
 pub use element::Element;
-pub use feature::{FeatureElement, VariabilityGroup};
+pub use feature::{FeatureElement, ParameterSchema, VariabilityGroup};
 pub use requirement::ReqElement;
 pub use sysml::{SysmlConnector, SysmlOperation, SysmlPart, SysmlPort, SysmlProperty};
 pub use use_case::UseCaseElement;

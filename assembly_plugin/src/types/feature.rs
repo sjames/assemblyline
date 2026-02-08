@@ -2,6 +2,22 @@ use super::core::ElementCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Parameter schema for a feature
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParameterSchema {
+    #[serde(rename = "type")]
+    pub param_type: String,  // "Integer", "Boolean", "Enum"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub range: Option<(i64, i64)>,  // For Integer type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<String>>,  // For Enum type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    pub default: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
 /// Feature element - product-line variability point
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureElement {
@@ -19,6 +35,15 @@ pub struct FeatureElement {
     pub group: Option<String>,
     #[serde(default)]
     pub body: serde_json::Value,
+    /// Parameter schemas (Phase 1 feature parameters)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<HashMap<String, ParameterSchema>>,
+    /// Constraint expressions
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub constraints: Option<Vec<String>>,
+    /// Required feature IDs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires: Option<serde_json::Value>,  // Can be string or array
 }
 
 fn default_concrete() -> Option<bool> {
