@@ -55,7 +55,7 @@ test:
 	done
 	@echo ""
 	@echo "3. Running example compilation tests..."
-	@for example in examples/sat-validation-example.typ examples/parameters-example.typ examples/test-json-export.typ; do \
+	@for example in examples/sat-validation-example.typ examples/parameters-example.typ examples/test-json-export.typ examples/parameter-visualization-demo.typ; do \
 		echo "  ✓ Compiling $$example..."; \
 		typst compile --root . "$$example" > /dev/null 2>&1 || { echo "  ✗ Failed: $$example"; exit 1; }; \
 	done

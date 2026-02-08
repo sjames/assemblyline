@@ -1753,3 +1753,19 @@
   validation-status,
   format-validation-errors,
 )
+
+// Import and initialize parameter visualization module
+#import "parameter-visualization.typ": make-parameter-visualizations
+
+// Create parameter visualization functions with access to registry state
+#let __param-viz = make-parameter-visualizations(__registry, __active-config)
+
+// Export visualization functions
+#let render-parameter-schema = __param-viz.render-parameter-schema
+#let render-all-parameter-schemas = __param-viz.render-all-parameter-schemas
+#let render-parameter-bindings = __param-viz.render-parameter-bindings
+#let render-all-parameter-bindings = __param-viz.render-all-parameter-bindings
+#let render-feature-constraints = __param-viz.render-feature-constraints
+#let render-all-constraints = __param-viz.render-all-constraints
+#let render-constraint-summary = __param-viz.render-constraint-summary
+#let render-parameter-report = __param-viz.render-parameter-report

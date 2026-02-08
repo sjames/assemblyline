@@ -26,6 +26,14 @@
     "F-ECU",            // ECU platform (mandatory)
     "F-ECU-SINGLE"      // Single-core processor (base)
   ),
+  bindings: (
+    "F-RADAR": (
+      update_rate: 20,              // Standard update rate for base configuration
+      angular_resolution: 3,         // Moderate resolution
+      enable_tracking: true,         // Enable tracking for safety
+      processing_mode: "Balanced"    // Balanced performance
+    )
+  ),
   tags: (
     market: "Entry-Level Vehicles",
     segment: "B-segment / Compact",
@@ -69,6 +77,21 @@
     // ECU Platform (high-performance)
     "F-ECU",            // ECU platform (mandatory)
     "F-ECU-MULTI"       // Multi-core processor (premium)
+  ),
+  bindings: (
+    "F-RADAR": (
+      update_rate: 40,               // Higher update rate for premium performance
+      angular_resolution: 2,         // Better angular resolution
+      enable_tracking: true,         // Enable tracking
+      processing_mode: "Accurate"    // Accurate mode for premium
+    ),
+    "F-ACC": (
+      min_speed: 20,                 // Lower minimum for stop-and-go
+      max_speed: 180,                // High max speed for highway
+      default_time_gap: 15,          // Shorter gap for sportier feel
+      comfort_mode: "Sport",         // Sport mode for premium
+      enable_stop_and_go: true       // Premium stop-and-go capability
+    )
   ),
   tags: (
     market: "Premium Vehicles",

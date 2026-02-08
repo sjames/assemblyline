@@ -59,12 +59,47 @@
   The quad camera system shall provide 360° surround view with overlap for stitching.
 ]
 
-// Radar system (mandatory)
-#feature("Radar System", id: "F-RADAR", concrete: true, parent: "F-SENSORS", tags: (
-  priority: "P1",
-  asil: "C"
-))[
-  Radar-based perception for distance and velocity measurement.
+// Radar system (mandatory) with configurable parameters
+#feature("Radar System", id: "F-RADAR", concrete: true, parent: "F-SENSORS",
+  tags: (
+    priority: "P1",
+    asil: "C"
+  ),
+  parameters: (
+    update_rate: (
+      type: "Integer",
+      range: (10, 100),
+      unit: "Hz",
+      default: 20,
+      description: "Radar measurement update frequency"
+    ),
+    angular_resolution: (
+      type: "Integer",
+      range: (1, 10),
+      unit: "degrees",
+      default: 2,
+      description: "Angular resolution for target separation"
+    ),
+    enable_tracking: (
+      type: "Boolean",
+      default: true,
+      description: "Enable multi-target tracking algorithm"
+    ),
+    processing_mode: (
+      type: "Enum",
+      values: ("Fast", "Balanced", "Accurate"),
+      default: "Balanced",
+      description: "Signal processing mode"
+    )
+  ),
+  constraints: (
+    // High update rate requires fast processing mode or tracking disabled
+    "F-RADAR.update_rate >= 50 => F-RADAR.processing_mode == Fast || !F-RADAR.enable_tracking",
+    // Accurate mode requires lower angular resolution
+    "F-RADAR.processing_mode == Accurate => F-RADAR.angular_resolution <= 3"
+  )
+)[
+  Radar-based perception for distance and velocity measurement with configurable performance parameters.
 ]
 
 #req("REQ-RAD-001", belongs_to: "F-RADAR", tags: (type: "functional", asil: "C"))[

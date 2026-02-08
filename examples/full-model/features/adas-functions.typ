@@ -74,12 +74,56 @@
   The system shall achieve full braking (10 m/s²) within 200ms of decision.
 ]
 
-// Adaptive Cruise Control (ACC)
-#feature("Adaptive Cruise Control", id: "F-ACC", concrete: true, parent: "FUNC-SUITE", tags: (
-  cost-impact: "+200 EUR",
-  asil: "B"
-))[
-  Speed and distance control with lead vehicle following.
+// Adaptive Cruise Control (ACC) with configurable parameters
+#feature("Adaptive Cruise Control", id: "F-ACC", concrete: true, parent: "FUNC-SUITE",
+  tags: (
+    cost-impact: "+200 EUR",
+    asil: "B"
+  ),
+  parameters: (
+    min_speed: (
+      type: "Integer",
+      range: (20, 50),
+      unit: "km/h",
+      default: 30,
+      description: "Minimum operational speed"
+    ),
+    max_speed: (
+      type: "Integer",
+      range: (120, 200),
+      unit: "km/h",
+      default: 180,
+      description: "Maximum operational speed"
+    ),
+    default_time_gap: (
+      type: "Integer",
+      range: (10, 30),
+      unit: "deciseconds",
+      default: 18,
+      description: "Default following time gap (tenths of second)"
+    ),
+    comfort_mode: (
+      type: "Enum",
+      values: ("Eco", "Comfort", "Sport"),
+      default: "Comfort",
+      description: "Acceleration/braking aggressiveness"
+    ),
+    enable_stop_and_go: (
+      type: "Boolean",
+      default: false,
+      description: "Enable stop-and-go traffic capability"
+    )
+  ),
+  constraints: (
+    // Stop-and-go requires lower minimum speed
+    "F-ACC.enable_stop_and_go => F-ACC.min_speed <= 30",
+    // Sport mode requires higher max speed
+    "F-ACC.comfort_mode == Sport => F-ACC.max_speed >= 160",
+    // Eco mode uses longer time gaps
+    "F-ACC.comfort_mode == Eco => F-ACC.default_time_gap >= 20"
+  )
+)[
+  Speed and distance control with lead vehicle following. Configurable for different driving styles and traffic conditions.
 ]
 
 #req("REQ-ACC-001", belongs_to: "F-ACC", tags: (type: "functional", asil: "B"))[
