@@ -53,7 +53,9 @@
 
 /// Recursively compute layout positions for all features
 /// Returns: dictionary with feature positions and metadata
-#let compute-layout(feature-id, registry, x-pos, y-pos, selected, visited: ()) = {
+/// depth: current depth level (0 = root). When max-depth is reached, stop expanding children.
+/// max-depth: maximum depth to traverse (none = unlimited)
+#let compute-layout(feature-id, registry, x-pos, y-pos, selected, visited: (), depth: 0, max-depth: none) = {
   // Prevent infinite loops
   if feature-id in visited {
     return (nodes: (), edges: (), height: 0)
@@ -65,10 +67,21 @@
     return (nodes: (), edges: (), height: 0)
   }
 
-  // Get children
-  let children = registry.pairs()
-    .filter(p => p.last().type == "feature" and p.last().parent == feature-id)
-    .map(p => p.last())
+  // Check if we've reached max depth - if so, don't expand children
+  let should-expand-children = if max-depth != none {
+    depth < max-depth
+  } else {
+    true
+  }
+
+  // Get children (only if we should expand)
+  let children = if should-expand-children {
+    registry.pairs()
+      .filter(p => p.last().type == "feature" and p.last().parent == feature-id)
+      .map(p => p.last())
+  } else {
+    ()
+  }
 
   // Calculate this subtree's total height
   let subtree-height = compute-subtree-height(feature-id, registry, visited: visited)
@@ -104,7 +117,9 @@
         child-x,
         child-y,
         selected,
-        visited: new-visited
+        visited: new-visited,
+        depth: depth + 1,
+        max-depth: max-depth
       )
 
       // Accumulate child nodes
@@ -127,16 +142,20 @@
       group: feature.group,
     )
 
-    for child-node in child-nodes {
-      // Determine if child is mandatory (check if it's concrete and not in an XOR/OR group)
-      let is-mandatory = child-node.selected or (feature.group == none)
+    // Only create individual edges if there's NO group
+    // Group arcs will handle the connections for XOR/OR groups
+    if feature.group not in ("XOR", "OR") {
+      for child-node in child-nodes {
+        // Determine if child is mandatory
+        let is-mandatory = child-node.selected or (feature.group == none)
 
-      edges.push((
-        from: parent-node,
-        to: child-node,
-        mandatory: is-mandatory,
-        group-type: feature.group,
-      ))
+        edges.push((
+          from: parent-node,
+          to: child-node,
+          mandatory: is-mandatory,
+          group-type: feature.group,
+        ))
+      }
     }
 
     // Store group metadata for arc rendering
@@ -151,6 +170,60 @@
   }
 
   (nodes: nodes, edges: edges, height: subtree-height)
+}
+
+/// Compute layout starting from children (skipping root node)
+/// Used when show-root: false to save space
+#let compute-layout-without-root(root-id, registry, selected, max-depth: none) = {
+  let root-feature = registry.at(root-id, default: none)
+  if root-feature == none {
+    return (nodes: (), edges: (), height: 0)
+  }
+
+  // Get direct children of root
+  let children = registry.pairs()
+    .filter(p => p.last().type == "feature" and p.last().parent == root-id)
+    .map(p => p.last())
+
+  if children.len() == 0 {
+    return (nodes: (), edges: (), height: 0)
+  }
+
+  // Layout each child as a separate tree starting at x=0
+  let all-nodes = ()
+  let all-edges = ()
+  let current-y = 0pt
+
+  // Adjust max-depth: when skipping root, we start at depth 0 for children
+  // So if user wants 2 levels total and we skip root, we show depth 0-1 (2 levels)
+  let adjusted-max-depth = if max-depth != none {
+    max-depth - 1  // Subtract 1 because we're skipping the root level
+  } else {
+    none
+  }
+
+  for child in children {
+    let child-layout = compute-layout(
+      child.id,
+      registry,
+      0pt,
+      current-y,
+      selected,
+      visited: (),
+      depth: 0,
+      max-depth: adjusted-max-depth
+    )
+
+    all-nodes += child-layout.nodes
+    all-edges += child-layout.edges
+
+    // Move down for next child tree
+    current-y += child-layout.height * layout-defaults.vertical-spacing
+  }
+
+  let total-height = children.map(c => compute-subtree-height(c.id, registry, visited: ())).sum()
+
+  (nodes: all-nodes, edges: all-edges, height: total-height)
 }
 
 /// Draw a feature node (rectangle with text)
@@ -272,6 +345,15 @@
   let min-y = calc.min(..child-y-positions)
   let max-y = calc.max(..child-y-positions)
 
+  // Draw horizontal line from parent to arc
+  let parent-right = (parent-pos.at(0) + w/2, parent-pos.at(1))
+  let arc-connection = (arc-x, parent-pos.at(1))
+  draw.line(
+    parent-right,
+    arc-connection,
+    stroke: 1pt + black
+  )
+
   // Draw vertical arc line
   draw.line(
     (arc-x, min-y),
@@ -321,7 +403,9 @@
   registry-state: none,  // Pass in the __registry state
   active-config-state: none,  // Pass in the __active-config state
   show-legend: true,
+  show-root: true,      // If false, hides root node and starts from children (saves space)
   scale-factor: 100%,   // Scale factor (e.g., 70% to shrink, 100% for normal)
+  max-depth: none,      // Maximum depth to display (none = unlimited, 1 = only root, 2 = root + children, etc.)
 ) = context {
   // Get registry from state
   let registry = if registry-state != none {
@@ -355,8 +439,12 @@
     return
   }
 
-  // Compute layout
-  let layout-result = compute-layout(root, registry, 0pt, 0pt, selected)
+  // Compute layout (with or without root node, with optional depth limit)
+  let layout-result = if show-root {
+    compute-layout(root, registry, 0pt, 0pt, selected, depth: 0, max-depth: max-depth)
+  } else {
+    compute-layout-without-root(root, registry, selected, max-depth: max-depth)
+  }
 
   // Render header
   if cfg-id != none {

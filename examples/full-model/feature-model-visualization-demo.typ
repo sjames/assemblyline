@@ -44,7 +44,7 @@
 
 = Feature Model Visualizations
 
-== Base Configuration (CFG-BASE)
+== Base Configuration (CFG-BASE) - With Root Node
 
 This shows the BASE ADAS safety package configuration with only essential features selected.
 
@@ -53,6 +53,22 @@ This shows the BASE ADAS safety package configuration with only essential featur
   config: "CFG-BASE",
   registry-state: __registry,
   active-config-state: __active-config,
+  show-root: true,
+  show-legend: true
+)
+
+#pagebreak()
+
+== Base Configuration (CFG-BASE) - Without Root Node (Space-Saving)
+
+Same configuration but with the root node hidden to save horizontal space.
+
+#feature-model-diagram(
+  root: "ROOT",
+  config: "CFG-BASE",
+  registry-state: __registry,
+  active-config-state: __active-config,
+  show-root: false,
   show-legend: true
 )
 
@@ -72,15 +88,17 @@ This shows the PREMIUM ADAS package with advanced features enabled.
 
 #pagebreak()
 
-== Full Feature Model (No Configuration)
+== Full Feature Model (No Configuration) - Scaled to 70%
 
-This shows the complete feature model without any configuration highlighting.
+This shows the complete feature model without any configuration highlighting, scaled to 70% to fit more compactly.
 
 #feature-model-diagram(
   root: "ROOT",
   config: none,
   registry-state: __registry,
   active-config-state: __active-config,
+  show-root: false,
+  scale-factor: 70%,
   show-legend: true
 )
 

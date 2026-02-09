@@ -13,10 +13,10 @@ help:
 	@echo "make clean             - Clean build artifacts"
 	@echo ""
 	@echo "Test Coverage:"
-	@echo "  - 11 Rust unit tests (SAT solver + feature validation)"
-	@echo "  - 5 Typst integration tests"
-	@echo "  - 3 Example compilation tests"
-	@echo "  - 1 Parameter validation test"
+	@echo "  - 27 Rust unit tests (SAT solver + feature validation + parameters + constraints)"
+	@echo "  - 8 Typst integration tests"
+	@echo "  - 6 Example compilation tests (including feature visualizations)"
+	@echo "  - 1 Parameter validation test (negative test)"
 	@echo ""
 
 build:
@@ -55,7 +55,7 @@ test:
 	done
 	@echo ""
 	@echo "3. Running example compilation tests..."
-	@for example in examples/sat-validation-example.typ examples/parameters-example.typ examples/test-json-export.typ examples/parameter-visualization-demo.typ; do \
+	@for example in examples/sat-validation-example.typ examples/parameters-example.typ examples/test-json-export.typ examples/parameter-visualization-demo.typ examples/feature-subtree-demo.typ examples/full-model/feature-model-visualization-demo.typ; do \
 		echo "  ✓ Compiling $$example..."; \
 		typst compile --root . "$$example" > /dev/null 2>&1 || { echo "  ✗ Failed: $$example"; exit 1; }; \
 	done
@@ -84,4 +84,5 @@ test-clean:
 	@echo "Cleaning test artifacts..."
 	@cd tests && rm -f test-*.pdf
 	@cd examples && rm -f *.pdf
+	@cd examples/full-model && rm -f *.pdf
 	@echo "✓ Test artifacts cleaned"
