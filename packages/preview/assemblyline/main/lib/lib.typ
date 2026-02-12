@@ -735,9 +735,23 @@
     ""
   }
 
-  // Style based on selection
+  // Color palette for depth-based visualization
+  // Colors chosen for good contrast and visual comfort
+  let depth-colors = (
+    rgb("#1e3a8a"),  // Level 0: Deep blue
+    rgb("#0891b2"),  // Level 1: Cyan
+    rgb("#059669"),  // Level 2: Emerald green
+    rgb("#d97706"),  // Level 3: Amber
+    rgb("#7c3aed"),  // Level 4: Violet
+    rgb("#db2777"),  // Level 5: Pink
+  )
+
+  // Get color for current depth (cycle if deeper than palette)
+  let depth-color = depth-colors.at(calc.rem(depth, depth-colors.len()))
+
+  // Style based on selection with depth-based colors
   let node-content = if is-selected {
-    text(fill: green.darken(20%), weight: "bold")[
+    text(fill: depth-color, weight: "bold")[
       #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
   } else {
@@ -782,9 +796,23 @@
     ""
   }
 
-  // Style based on selection
+  // Color palette for depth-based visualization
+  // Colors chosen for good contrast and visual comfort
+  let depth-colors = (
+    rgb("#1e3a8a"),  // Level 0: Deep blue
+    rgb("#0891b2"),  // Level 1: Cyan
+    rgb("#059669"),  // Level 2: Emerald green
+    rgb("#d97706"),  // Level 3: Amber
+    rgb("#7c3aed"),  // Level 4: Violet
+    rgb("#db2777"),  // Level 5: Pink
+  )
+
+  // Get color for current depth (cycle if deeper than palette)
+  let depth-color = depth-colors.at(calc.rem(depth, depth-colors.len()))
+
+  // Style based on selection with depth-based colors
   let node-content = if is-selected {
-    text(fill: green.darken(20%), weight: "bold")[
+    text(fill: depth-color, weight: "bold")[
       #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
   } else {
@@ -799,7 +827,8 @@
   // Render description if enabled and body exists
   if show-descriptions and feature.body != none and feature.body != [] {
     let desc-indent = "  " * depth + "│ "
-    let desc-color = if is-selected { luma(40) } else { luma(100) }
+    // Use same depth color for descriptions but slightly lighter
+    let desc-color = if is-selected { depth-color.lighten(20%) } else { luma(100) }
 
     // Render description with continuation marker
     [#desc-indent#text(size: 0.85em, fill: desc-color, style: "italic")[#feature.body]\ ]
@@ -1116,7 +1145,8 @@
     radius: 3pt
   )[
     #text(size: 0.85em, fill: gray)[
-      *Legend:* ● Feature | ⊕ XOR Group (select only one) | ⊙ OR Group (select any) | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected]
+      *Legend:* ● Feature | ⊕ XOR Group (select only one) | ⊙ OR Group (select any) | #text(fill: gray)[Not Selected] \
+      *Selected features by level:* #text(fill: rgb("#1e3a8a"), weight: "bold")[L0] | #text(fill: rgb("#0891b2"), weight: "bold")[L1] | #text(fill: rgb("#059669"), weight: "bold")[L2] | #text(fill: rgb("#d97706"), weight: "bold")[L3] | #text(fill: rgb("#7c3aed"), weight: "bold")[L4] | #text(fill: rgb("#db2777"), weight: "bold")[L5]
     ]
   ]
 }
@@ -1204,7 +1234,8 @@
     radius: 3pt
   )[
     #text(size: 0.85em, fill: gray)[
-      *Legend:* ● Feature | ⊕ XOR Group (select only one) | ⊙ OR Group (select any) | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected] \
+      *Legend:* ● Feature | ⊕ XOR Group (select only one) | ⊙ OR Group (select any) | #text(fill: gray)[Not Selected] \
+      *Selected features by level:* #text(fill: rgb("#1e3a8a"), weight: "bold")[L0] | #text(fill: rgb("#0891b2"), weight: "bold")[L1] | #text(fill: rgb("#059669"), weight: "bold")[L2] | #text(fill: rgb("#d97706"), weight: "bold")[L3] | #text(fill: rgb("#7c3aed"), weight: "bold")[L4] | #text(fill: rgb("#db2777"), weight: "bold")[L5] \
       #if show-descriptions [
         *│* marks feature description text (indented below feature name)
       ]
