@@ -8,6 +8,7 @@
 #let __registry      = state("asln-registry", (:))
 #let __links         = state("asln-links", ())        // Individual link records
 #let __active-config = state("asln-active-config", none)
+#let __tree-counter = state("asln-tree-counter", 0)
 
 // Extract trailing content block safely
 #let __body(args) = {
@@ -712,8 +713,44 @@
 
 // Reporting
 
+// Helper function to format feature constraints for display with clickable links
+// tree-prefix: unique identifier for this tree instance to avoid duplicate labels
+#let __format-constraints(feature, tree-prefix) = {
+  let constraint-parts = ()
+
+  // Check for 'requires' constraint in tags (implies relationship)
+  if "requires" in feature.tags {
+    let req = feature.tags.requires
+    let req-list = if type(req) == array { req } else { (req,) }
+    for req-id in req-list {
+      // Create clickable link with tree-specific prefix
+      let target-label = tree-prefix + req-id
+      constraint-parts.push([implies #link(label(target-label))[#req-id]])
+    }
+  }
+
+  // Check for 'excludes' constraint in tags
+  if "excludes" in feature.tags {
+    let excl = feature.tags.excludes
+    let excl-list = if type(excl) == array { excl } else { (excl,) }
+    for excl-id in excl-list {
+      // Create clickable link with tree-specific prefix
+      let target-label = tree-prefix + excl-id
+      constraint-parts.push([excludes #link(label(target-label))[#excl-id]])
+    }
+  }
+
+  // Return formatted constraint string
+  if constraint-parts.len() > 0 {
+    text(size: 0.7em, fill: luma(100))[ (#constraint-parts.join(", "))]
+  } else {
+    []
+  }
+}
+
 // Render a feature tree node recursively
-#let __render-tree-node(feature, registry, selected, depth) = {
+// tree-prefix: unique identifier for this tree instance to create unique labels
+#let __render-tree-node(feature, registry, selected, depth, tree-prefix) = {
   let indent = "  " * depth
   let is-selected = selected.contains(feature.id)
 
@@ -749,6 +786,9 @@
   // Get color for current depth (cycle if deeper than palette)
   let depth-color = depth-colors.at(calc.rem(depth, depth-colors.len()))
 
+  // Format constraints with tree-specific prefix for unique labels
+  let constraint-display = __format-constraints(feature, tree-prefix)
+
   // Style based on selection with depth-based colors
   let node-content = if is-selected {
     text(fill: depth-color, weight: "bold")[
@@ -760,8 +800,11 @@
     ]
   }
 
-  // Render this node
-  [#indent#node-content\ ]
+  // Create unique label for this feature in this tree instance
+  let feature-label = tree-prefix + feature.id
+
+  // Render this node with constraints and label
+  [#indent#node-content#constraint-display#label(feature-label)\ ]
 
   // Find and render children
   let children = registry.pairs()
@@ -769,12 +812,13 @@
     .map(p => p.last())
 
   for child in children {
-    __render-tree-node(child, registry, selected, depth + 1)
+    __render-tree-node(child, registry, selected, depth + 1, tree-prefix)
   }
 }
 
 // Detailed tree node renderer that includes feature body/description
-#let __render-tree-node-detailed(feature, registry, selected, depth, show-descriptions: true, max-depth: none) = {
+// tree-prefix: unique identifier for this tree instance to create unique labels
+#let __render-tree-node-detailed(feature, registry, selected, depth, show-descriptions: true, max-depth: none, tree-prefix) = {
   let indent = "  " * depth
   let is-selected = selected.contains(feature.id)
 
@@ -810,6 +854,9 @@
   // Get color for current depth (cycle if deeper than palette)
   let depth-color = depth-colors.at(calc.rem(depth, depth-colors.len()))
 
+  // Format constraints with tree-specific prefix for unique labels
+  let constraint-display = __format-constraints(feature, tree-prefix)
+
   // Style based on selection with depth-based colors
   let node-content = if is-selected {
     text(fill: depth-color, weight: "bold")[
@@ -821,8 +868,11 @@
     ]
   }
 
-  // Render this node
-  [#indent#node-content\ ]
+  // Create unique label for this feature in this tree instance
+  let feature-label = tree-prefix + feature.id
+
+  // Render this node with constraints and label
+  [#indent#node-content#constraint-display#label(feature-label)\ ]
 
   // Render description if enabled and body exists
   if show-descriptions and feature.body != none and feature.body != [] {
@@ -851,7 +901,7 @@
       .map(p => p.last())
 
     for child in children {
-      __render-tree-node-detailed(child, registry, selected, depth + 1, show-descriptions: show-descriptions, max-depth: max-depth)
+      __render-tree-node-detailed(child, registry, selected, depth + 1, show-descriptions: show-descriptions, max-depth: max-depth, tree-prefix)
     }
   } else if max-depth != none {
     // Indicate that there are hidden children
@@ -1130,9 +1180,14 @@
 
   v(0.5em)
 
+  // Generate unique tree prefix for labels
+  let tree-id = __tree-counter.get()
+  __tree-counter.update(n => n + 1)
+  let tree-prefix = "tree" + str(tree-id) + "-"
+
   // Render tree content (breakable across pages)
   text(font: "Courier New", size: 0.9em)[
-    #__render-tree-node(root-feature, registry, selected, 0)
+    #__render-tree-node(root-feature, registry, selected, 0, tree-prefix)
   ]
 
   v(0.5em)
@@ -1219,9 +1274,14 @@
 
   v(0.5em)
 
+  // Generate unique tree prefix for labels
+  let tree-id = __tree-counter.get()
+  __tree-counter.update(n => n + 1)
+  let tree-prefix = "tree" + str(tree-id) + "-"
+
   // Render tree content (breakable across pages)
   text(font: "Courier New", size: 0.9em)[
-    #__render-tree-node-detailed(root-feature, registry, selected, 0, show-descriptions: show-descriptions, max-depth: max-depth)
+    #__render-tree-node-detailed(root-feature, registry, selected, 0, show-descriptions: show-descriptions, max-depth: max-depth, tree-prefix)
   ]
 
   v(0.5em)

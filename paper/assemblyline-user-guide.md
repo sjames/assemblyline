@@ -939,6 +939,157 @@ Configurations bind specific values to feature parameters:
 - Integer values must be within declared range
 - Enum values must be in declared values list
 
+### Feature Constraints
+
+**Feature constraints** express dependencies and conflicts between features. They appear next to each feature in the feature tree visualization.
+
+#### Implies (Requires) Relationship
+
+Use the `requires` tag to specify that selecting a feature automatically requires other features:
+
+```typst
+#feature("Credit Card Payment", id: "F-CREDIT-CARD",
+  parent: "F-PAYMENT",
+  tags: (
+    requires: "F-PCI-COMPLIANCE"    // Implies F-PCI-COMPLIANCE
+  )
+)[
+  Credit card payment processing. Requires PCI compliance.
+]
+
+#feature("PCI Compliance", id: "F-PCI-COMPLIANCE",
+  parent: "F-SECURITY"
+)[
+  PCI DSS compliance for credit card handling.
+]
+```
+
+**Multiple dependencies:**
+
+```typst
+#feature("Distributed Database", id: "F-DISTRIBUTED-DB",
+  parent: "F-STORAGE",
+  tags: (
+    requires: ("F-CLOUD", "F-REPLICATION")  // Array for multiple
+  )
+)[
+  Distributed database system requiring cloud infrastructure and replication.
+]
+```
+
+**Visualization in feature tree:**
+```
+● F-CREDIT-CARD – Credit Card Payment (implies F-PCI-COMPLIANCE)
+● F-DISTRIBUTED-DB – Distributed Database (implies F-CLOUD, F-REPLICATION)
+```
+
+The constraint appears in small text next to the feature name. The referenced feature IDs are **clickable links** that navigate to the target feature.
+
+#### Excludes (Mutual Exclusion) Relationship
+
+Use the `excludes` tag to specify features that cannot be selected together:
+
+```typst
+#feature("Cryptocurrency Payment", id: "F-CRYPTO",
+  parent: "F-PAYMENT",
+  tags: (
+    excludes: "F-TRADITIONAL-BANKING"
+  )
+)[
+  Cryptocurrency payment support. Incompatible with traditional banking.
+]
+
+#feature("Traditional Banking", id: "F-TRADITIONAL-BANKING",
+  parent: "F-INTEGRATION"
+)[
+  Traditional bank wire transfer integration.
+]
+```
+
+**Bidirectional exclusion:**
+
+```typst
+#feature("Blockchain Storage", id: "F-BLOCKCHAIN",
+  parent: "F-STORAGE",
+  tags: (
+    excludes: "F-CENTRALIZED-DB"
+  )
+)[
+  Blockchain-based storage. Excludes centralized database.
+]
+
+#feature("Centralized Database", id: "F-CENTRALIZED-DB",
+  parent: "F-STORAGE",
+  tags: (
+    excludes: "F-BLOCKCHAIN"  // Mutual exclusion
+  )
+)[
+  Traditional centralized SQL database.
+]
+```
+
+**Visualization in feature tree:**
+```
+● F-CRYPTO – Cryptocurrency (excludes F-TRADITIONAL-BANKING)
+● F-BLOCKCHAIN – Blockchain Storage (excludes F-CENTRALIZED-DB)
+```
+
+#### Combined Constraints
+
+Features can have both requires and excludes constraints:
+
+```typst
+#feature("Cryptocurrency Payment", id: "F-CRYPTO",
+  parent: "F-PAYMENT",
+  tags: (
+    requires: "F-BLOCKCHAIN",
+    excludes: ("F-TRADITIONAL-BANKING", "F-CENTRALIZED-DB")
+  )
+)[
+  Cryptocurrency payment with blockchain. Requires blockchain integration
+  and excludes traditional banking/centralized storage.
+]
+```
+
+**Visualization:**
+```
+● F-CRYPTO – Cryptocurrency (implies F-BLOCKCHAIN, excludes F-TRADITIONAL-BANKING, F-CENTRALIZED-DB)
+```
+
+#### Common Use Cases
+
+**Security dependencies:**
+```typst
+#feature("HTTPS API", id: "F-HTTPS",
+  tags: (requires: "F-TLS-CERT")
+)[]
+
+#feature("Remote Access", id: "F-REMOTE",
+  tags: (requires: ("F-HTTPS", "F-FIREWALL"))
+)[]
+```
+
+**Platform exclusions:**
+```typst
+#feature("Windows Driver", id: "F-WIN-DRIVER",
+  tags: (excludes: ("F-LINUX-DRIVER", "F-MACOS-DRIVER"))
+)[]
+```
+
+**Hardware dependencies:**
+```typst
+#feature("GPU Acceleration", id: "F-GPU",
+  tags: (requires: "F-NVIDIA-CUDA")
+)[]
+```
+
+**Best practices:**
+- Use `requires` for **must-have dependencies** (security, infrastructure, etc.)
+- Use `excludes` for **incompatible features** (platform-specific, conflicting technologies)
+- Constraints appear automatically in all feature tree visualizations
+- Constraint feature IDs are clickable in PDF output for easy navigation
+- Configuration validation checks that all constraints are satisfied
+
 ### Requirements
 
 Specify what the system must do:
