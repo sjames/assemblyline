@@ -756,6 +756,81 @@
   }
 }
 
+// Detailed tree node renderer that includes feature body/description
+#let __render-tree-node-detailed(feature, registry, selected, depth, show-descriptions: true, max-depth: none) = {
+  let indent = "  " * depth
+  let is-selected = selected.contains(feature.id)
+
+  // Determine node symbols and styling
+  let group-symbol = if feature.group == "XOR" {
+    "⊕"
+  } else if feature.group == "OR" {
+    "⊙"
+  } else {
+    "●"
+  }
+
+  let concrete-marker = if feature.concrete == false {
+    " (abstract)"
+  } else {
+    ""
+  }
+
+  // Style based on selection
+  let node-content = if is-selected {
+    text(fill: green.darken(20%), weight: "bold")[
+      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
+    ]
+  } else {
+    text(fill: gray)[
+      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
+    ]
+  }
+
+  // Render this node
+  [#indent#node-content\ ]
+
+  // Render description if enabled and body exists
+  if show-descriptions and feature.body != none and feature.body != [] {
+    let desc-indent = "  " * depth + "│ "
+    let desc-color = if is-selected { luma(40) } else { luma(100) }
+
+    // Render description with continuation marker
+    [#desc-indent#text(size: 0.85em, fill: desc-color, style: "italic")[#feature.body]\ ]
+
+    // Add spacing line after description
+    [#desc-indent\ ]
+  }
+
+  // Check if we should render children (depth limit)
+  let should-render-children = if max-depth == none {
+    true
+  } else {
+    depth < max-depth
+  }
+
+  if should-render-children {
+    // Find and render children
+    let children = registry.pairs()
+      .filter(p => p.last().type == "feature" and p.last().parent == feature.id)
+      .map(p => p.last())
+
+    for child in children {
+      __render-tree-node-detailed(child, registry, selected, depth + 1, show-descriptions: show-descriptions, max-depth: max-depth)
+    }
+  } else if max-depth != none {
+    // Indicate that there are hidden children
+    let children-count = registry.pairs()
+      .filter(p => p.last().type == "feature" and p.last().parent == feature.id)
+      .len()
+
+    if children-count > 0 {
+      let child-indent = "  " * (depth + 1)
+      [#child-indent#text(fill: luma(150), size: 0.85em, style: "italic")[... (#children-count) more features ...]\ ]
+    }
+  }
+}
+
 // Helper function to build feature path from a feature to root
 #let __build-feature-path(feature-id, registry) = {
   let path = ()
@@ -1036,6 +1111,97 @@
   )[
     #text(size: 0.85em, fill: gray)[
       *Legend:* ● Feature | ⊕ XOR Group | ⊙ OR Group | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected]
+    ]
+  ]
+}
+
+// #feature-tree-detailed: Render hierarchical feature model with descriptions
+// Similar to #feature-tree but includes feature body/description text under each node
+// Parameters:
+//   root: Starting feature ID (default: "ROOT")
+//   config: Configuration ID to highlight selected features (default: uses active config)
+//   show-descriptions: Whether to show feature descriptions (default: true)
+//   max-depth: Maximum depth to render (none = unlimited, 0 = root only, 1 = root + children, etc.)
+#let feature-tree-detailed(root: "ROOT", config: none, show-descriptions: true, max-depth: none) = context {
+  // Get registry from state
+  let registry = __registry.get()
+
+  // Determine which configuration to use
+  let cfg-id = if config != none {
+    config
+  } else {
+    __active-config.get()
+  }
+
+  // Get selected features from configuration
+  let selected = if cfg-id != none and ("CONFIG:" + cfg-id) in registry {
+    registry.at("CONFIG:" + cfg-id).selected
+  } else {
+    ()
+  }
+
+  // Get root feature
+  let root-feature = registry.at(root, default: none)
+
+  if root-feature == none {
+    block(fill: red.lighten(80%), inset: 1em)[
+      *Error:* Feature "#root" not found in registry. \
+      *Registry keys:* #registry.keys().join(", ") \
+      *Registry has #registry.len() items*
+    ]
+    return
+  }
+
+  // Render header (non-breakable)
+  block(
+    width: 100%,
+    fill: luma(245),
+    inset: 1em,
+    radius: 4pt,
+    stroke: 1pt + luma(200)
+  )[
+    === Feature Tree (Detailed)
+    #grid(
+      columns: (auto, auto),
+      column-gutter: 2em,
+      row-gutter: 0.3em,
+      [*Starting Feature:*], [#root],
+      [*Max Depth:*], [#if max-depth == none [Unlimited] else [#max-depth]],
+      [*Descriptions:*], [#if show-descriptions [Shown] else [Hidden]],
+      ..if cfg-id != none {
+        (
+          [*Configuration:*], [#cfg-id],
+          [*Selected Features:*], [#text(fill: green.darken(30%), weight: "bold")[#selected.len()] of #registry.pairs().filter(p => p.last().type == "feature").len()]
+        )
+      } else {
+        (
+          [*Configuration:*], [_(None – showing all features)_]
+        )
+      }
+    )
+  ]
+
+  v(0.5em)
+
+  // Render tree content (breakable across pages)
+  text(font: "Courier New", size: 0.9em)[
+    #__render-tree-node-detailed(root-feature, registry, selected, 0, show-descriptions: show-descriptions, max-depth: max-depth)
+  ]
+
+  v(0.5em)
+
+  // Render legend (non-breakable)
+  block(
+    width: 100%,
+    fill: luma(250),
+    inset: 0.5em,
+    radius: 3pt
+  )[
+    #text(size: 0.85em, fill: gray)[
+      *Legend:* ● Feature | ⊕ XOR Group | ⊙ OR Group | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected] \
+      #if show-descriptions [
+        *│* marks feature description text (indented below feature name)
+      ]
     ]
   ]
 }
