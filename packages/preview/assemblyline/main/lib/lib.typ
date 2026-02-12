@@ -21,6 +21,7 @@
   feature: ("child_of",),
   req: ("belongs_to", "derives_from"),
   use_case: ("trace",),
+  interface: (),  // Interfaces don't have outgoing links (they are referenced by blocks)
   block_definition: ("allocate", "satisfy"),
   internal_block_diagram: ("satisfy", "belongs_to"),
   sequence_diagram: ("satisfy", "belongs_to"),
@@ -206,6 +207,163 @@
   }
 }
 
+// Validate interface references in blocks
+// Call this function after all elements are registered to check interface integrity
+#let validate-interface-references() = context {
+  let registry = __registry.get()
+  let violations = ()
+
+  // Get all interfaces
+  let interfaces = registry.pairs()
+    .filter(p => p.last().type == "interface")
+    .map(p => p.first())
+
+  // Check all blocks
+  let blocks = registry.pairs()
+    .filter(p => p.last().type == "block_definition")
+    .map(p => p.last())
+
+  for block in blocks {
+    let provides = block.tags.at("sysml-provides", default: ())
+    let requires = block.tags.at("sysml-requires", default: ())
+    let ports = block.tags.at("sysml-ports", default: ())
+
+    // Check provides references
+    for if-id in provides {
+      if if-id not in registry {
+        violations.push(
+          "Block '" + block.id + "' provides interface '" + if-id + "' which does not exist"
+        )
+      } else if registry.at(if-id).type != "interface" {
+        violations.push(
+          "Block '" + block.id + "' provides '" + if-id + "' which is not an interface (type: " + registry.at(if-id).type + ")"
+        )
+      }
+    }
+
+    // Check requires references
+    for if-id in requires {
+      if if-id not in registry {
+        violations.push(
+          "Block '" + block.id + "' requires interface '" + if-id + "' which does not exist"
+        )
+      } else if registry.at(if-id).type != "interface" {
+        violations.push(
+          "Block '" + block.id + "' requires '" + if-id + "' which is not an interface (type: " + registry.at(if-id).type + ")"
+        )
+      }
+    }
+
+    // Check port interface references
+    for port in ports {
+      let port-if = port.at("interface", default: none)
+      if port-if != none {
+        if port-if not in registry {
+          violations.push(
+            "Block '" + block.id + "', port '" + port.name + "' references interface '" + port-if + "' which does not exist"
+          )
+        } else if registry.at(port-if).type != "interface" {
+          violations.push(
+            "Block '" + block.id + "', port '" + port.name + "' references '" + port-if + "' which is not an interface (type: " + registry.at(port-if).type + ")"
+          )
+        }
+
+        // Check consistency: port interface should match provides/requires
+        let direction = port.at("direction", default: "in")
+        if direction == "provided" or direction == "bidirectional" {
+          if port-if not in provides {
+            violations.push(
+              "Block '" + block.id + "', port '" + port.name + "' (direction: " + direction + ") references interface '" + port-if + "' but block does not provide this interface"
+            )
+          }
+        }
+        if direction == "required" or direction == "bidirectional" {
+          if port-if not in requires {
+            violations.push(
+              "Block '" + block.id + "', port '" + port.name + "' (direction: " + direction + ") references interface '" + port-if + "' but block does not require this interface"
+            )
+          }
+        }
+      }
+    }
+  }
+
+  // Report violations
+  if violations.len() > 0 {
+    let msg = "Interface validation failed with " + str(violations.len()) + " error(s):\n" + violations.join("\n")
+    panic(msg)
+  }
+}
+
+// Parse semantic version string (e.g., "2.1.3" -> (major: 2, minor: 1, patch: 3))
+#let __parse-semver(version-str) = {
+  let parts = version-str.split(".")
+  if parts.len() < 2 {
+    return (major: 0, minor: 0, patch: 0)
+  }
+  let major = int(parts.at(0, default: "0"))
+  let minor = int(parts.at(1, default: "0"))
+  let patch = int(parts.at(2, default: "0"))
+  (major: major, minor: minor, patch: patch)
+}
+
+// Check if two interface versions are compatible (semantic versioning)
+// Rule: Major version must match, minor/patch can differ
+#let __versions-compatible(required-ver, provided-ver) = {
+  let req = __parse-semver(required-ver)
+  let prov = __parse-semver(provided-ver)
+
+  // Major versions must match
+  if req.major != prov.major {
+    return false
+  }
+
+  // Provided minor version must be >= required minor version
+  if prov.minor < req.minor {
+    return false
+  }
+
+  // If minor versions match, provided patch must be >= required patch
+  if prov.minor == req.minor and prov.patch < req.patch {
+    return false
+  }
+
+  return true
+}
+
+// Validate interface version compatibility
+// Call this function after all elements are registered
+#let validate-interface-versions() = context {
+  let registry = __registry.get()
+  let violations = ()
+
+  // For each block that requires/provides interfaces, check version compatibility
+  // Note: This is a basic check - for now we just verify that versions are parseable
+  // Full compatibility checking would require storing version requirements in blocks
+
+  let interfaces = registry.pairs()
+    .filter(p => p.last().type == "interface")
+    .map(p => p.last())
+
+  for interface in interfaces {
+    let version = interface.tags.at("interface-version", default: "1.0.0")
+    let parsed = __parse-semver(version)
+
+    // Just verify it parsed correctly (basic validation)
+    if parsed.major == 0 and parsed.minor == 0 and parsed.patch == 0 and version != "0.0.0" {
+      violations.push(
+        "Interface '" + interface.id + "' has invalid version format: '" + version + "' (expected X.Y.Z)"
+      )
+    }
+  }
+
+  // Report violations
+  if violations.len() > 0 {
+    let msg = "Interface version validation failed with " + str(violations.len()) + " error(s):\n" + violations.join("\n")
+    panic(msg)
+  }
+}
+
 // Get all links for a specific element (by source)
 // NOTE: This function must be called from within a context block
 #let __get-links(element-id) = {
@@ -347,9 +505,13 @@
 // Purpose:      Define system components with full SysML block semantics
 // Required:     id, title
 // SysML Features:
+//   provides:     ("IF-ID1", "IF-ID2", ...) – interfaces this block implements/provides
+//   requires:     ("IF-ID3", "IF-ID4", ...) – interfaces this block depends on/requires
 //   properties:   ((name: "prop1", type: "Integer", default: 0, unit: "ms"), ...)
 //   operations:   ((name: "start", params: "void", returns: "bool"), ...)
-//   ports:        ((name: "httpPort", direction: "in", protocol: "HTTP"), ...)
+//   ports:        ((name: "httpPort", direction: "in|out|bidirectional|provided|required", protocol: "HTTP", interface: "IF-ID"), ...)
+//                 - direction: "in" (input), "out" (output), "bidirectional" (both), "provided" (implements interface), "required" (uses interface)
+//                 - interface: optional reference to interface definition
 //   parts:        ((name: "authService", type: "BLK-AUTH", multiplicity: "1"), ...) – composition with role names
 //   connectors:   ((from: "httpPort", to: "authService.authAPI", flow: "HTTPRequest"), ...) – internal wiring & delegation
 //                 - No dot = block's own port (delegation)
@@ -361,6 +523,8 @@
 #let block_definition(
   id,
   title: "",
+  provides: (),
+  requires: (),
   properties: (),
   operations: (),
   ports: (),
@@ -377,6 +541,8 @@
 
   // Store SysML-specific data in tags for easy access
   let full-tags = tags + (
+    sysml-provides: provides,
+    sysml-requires: requires,
     sysml-properties: properties,
     sysml-operations: operations,
     sysml-ports: ports,
@@ -444,6 +610,74 @@
   let tags = named.at("tags", default: (:))
   let links-param = named.at("links", default: (:))
   __element("test_case", id, title: title, tags: tags, links: links-param, body: __body(args))
+}
+
+// #interface – Interface Definition (Software & Hardware)
+// ──────────────────────────────────────────────────────────────────────────────
+// Purpose:      Define reusable interface specifications for both software and hardware
+// Required:     id, title
+// Parameters:
+//   type:         "software" | "hardware" | "mixed" – interface category
+//   version:      Semantic version string (e.g., "2.1.0") – default "1.0.0"
+//   protocol:     Protocol name (e.g., "HTTP/REST", "I2C", "CAN", "DBus")
+//   operations:   Array of operation definitions for software interfaces
+//                 ((name: "op", params: ((name, type, validation), ...), returns: "Type", errors: ("Err1", ...)), ...)
+//   signals:      Array of signal/event definitions for async notification
+//                 ((name: "signal", data: "field1: Type, field2: Type"), ...)
+//   registers:    Array of hardware register definitions
+//                 ((address: "0xNN", name: "REG_NAME", access: "R|W|RW", size: "N bytes", default: "0x00"), ...)
+//   messages:     Array of message definitions for message-based protocols (CAN, etc.)
+//                 ((id: "0xNN", name: "MSG_NAME", dlc: N, period: "Nms", signals: (...)), ...)
+//   electrical:   Dictionary of electrical characteristics (voltage, frequency, current, etc.)
+//   timing:       Dictionary of timing requirements (startup_time, sample_rate, latency, etc.)
+//   data_types:   Array of custom data type definitions
+//                 ((name: "TypeName", fields: ("field1: Type1", "field2: Type2", ...)), ...)
+//   constraints:  Array of constraint strings (e.g., "response_time < 100ms")
+//   tags:         Additional metadata
+//   body:         Free-form description
+#let interface(
+  title,
+  id: "",
+  type: "software",
+  version: "1.0.0",
+  protocol: "",
+  operations: (),
+  signals: (),
+  registers: (),
+  messages: (),
+  electrical: (:),
+  timing: (:),
+  data_types: (),
+  constraints: (),
+  ..args
+) = {
+  let named = args.named()
+  let body = __body(args)
+  let tags = named.at("tags", default: (:))
+  let links-param = named.at("links", default: (:))
+
+  // Validate required fields
+  assert(id != "", message: "Interface must have an id")
+  assert(title != "", message: "Interface must have a title")
+  assert(type in ("software", "hardware", "mixed"),
+    message: "Interface type must be 'software', 'hardware', or 'mixed'")
+
+  // Store interface-specific data in tags for easy access
+  let full-tags = tags + (
+    interface-type: type,
+    interface-version: version,
+    interface-protocol: protocol,
+    interface-operations: operations,
+    interface-signals: signals,
+    interface-registers: registers,
+    interface-messages: messages,
+    interface-electrical: electrical,
+    interface-timing: timing,
+    interface-data-types: data_types,
+    interface-constraints: constraints
+  )
+
+  __element("interface", id, title: title, tags: full-tags, links: links-param, body: body)
 }
 
 // NOTE: #links() function removed - links are now passed as parameters to elements
