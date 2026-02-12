@@ -726,8 +726,11 @@
     "●"
   }
 
-  let concrete-marker = if feature.concrete == false {
-    " (abstract)"
+  // Show group type instead of abstract marker
+  let group-marker = if feature.group == "OR" {
+    text(size: 0.75em)[ (select any)]
+  } else if feature.group == "XOR" {
+    text(size: 0.75em)[ (select only one)]
   } else {
     ""
   }
@@ -735,11 +738,11 @@
   // Style based on selection
   let node-content = if is-selected {
     text(fill: green.darken(20%), weight: "bold")[
-      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
+      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
   } else {
     text(fill: gray)[
-      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
+      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
   }
 
@@ -770,8 +773,11 @@
     "●"
   }
 
-  let concrete-marker = if feature.concrete == false {
-    " (abstract)"
+  // Show group type instead of abstract marker
+  let group-marker = if feature.group == "OR" {
+    text(size: 0.75em)[ (select any)]
+  } else if feature.group == "XOR" {
+    text(size: 0.75em)[ (select only one)]
   } else {
     ""
   }
@@ -779,11 +785,11 @@
   // Style based on selection
   let node-content = if is-selected {
     text(fill: green.darken(20%), weight: "bold")[
-      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
+      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
   } else {
     text(fill: gray)[
-      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#concrete-marker
+      #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
   }
 
@@ -1110,7 +1116,7 @@
     radius: 3pt
   )[
     #text(size: 0.85em, fill: gray)[
-      *Legend:* ● Feature | ⊕ XOR Group | ⊙ OR Group | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected]
+      *Legend:* ● Feature | ⊕ XOR Group (select only one) | ⊙ OR Group (select any) | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected]
     ]
   ]
 }
@@ -1198,7 +1204,7 @@
     radius: 3pt
   )[
     #text(size: 0.85em, fill: gray)[
-      *Legend:* ● Feature | ⊕ XOR Group | ⊙ OR Group | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected] \
+      *Legend:* ● Feature | ⊕ XOR Group (select only one) | ⊙ OR Group (select any) | #text(fill: green.darken(20%), weight: "bold")[Selected] | #text(fill: gray)[Not Selected] \
       #if show-descriptions [
         *│* marks feature description text (indented below feature name)
       ]
