@@ -753,6 +753,7 @@
 #let __render-tree-node(feature, registry, selected, depth, tree-prefix) = {
   let indent = "  " * depth
   let is-selected = selected.contains(feature.id)
+  let no-config = selected.len() == 0  // No configuration active
 
   // Determine node symbols and styling
   let group-symbol = if feature.group == "XOR" {
@@ -790,7 +791,9 @@
   let constraint-display = __format-constraints(feature, tree-prefix)
 
   // Style based on selection with depth-based colors
-  let node-content = if is-selected {
+  // If no configuration, all features get depth colors
+  // If configuration active, only selected features get depth colors
+  let node-content = if no-config or is-selected {
     text(fill: depth-color, weight: "bold")[
       #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
@@ -821,6 +824,7 @@
 #let __render-tree-node-detailed(feature, registry, selected, depth, show-descriptions: true, max-depth: none, tree-prefix) = {
   let indent = "  " * depth
   let is-selected = selected.contains(feature.id)
+  let no-config = selected.len() == 0  // No configuration active
 
   // Determine node symbols and styling
   let group-symbol = if feature.group == "XOR" {
@@ -858,7 +862,9 @@
   let constraint-display = __format-constraints(feature, tree-prefix)
 
   // Style based on selection with depth-based colors
-  let node-content = if is-selected {
+  // If no configuration, all features get depth colors
+  // If configuration active, only selected features get depth colors
+  let node-content = if no-config or is-selected {
     text(fill: depth-color, weight: "bold")[
       #group-symbol #feature.id#if feature.title != "" [ – #feature.title]#group-marker
     ]
@@ -878,7 +884,8 @@
   if show-descriptions and feature.body != none and feature.body != [] {
     let desc-indent = "  " * depth + "│ "
     // Use same depth color for descriptions but slightly lighter
-    let desc-color = if is-selected { depth-color.lighten(20%) } else { luma(100) }
+    // If no configuration, all descriptions get depth colors
+    let desc-color = if no-config or is-selected { depth-color.lighten(20%) } else { luma(100) }
 
     // Render description with continuation marker
     [#desc-indent#text(size: 0.85em, fill: desc-color, style: "italic")[#feature.body]\ ]
