@@ -227,6 +227,44 @@ Validating configurations...
 #text(green)[✓ All parameter bindings are valid!]
 
 // ==============================================================================
+// Feature Tree Visualization with Parameters
+// ==============================================================================
+
+#pagebreak()
+
+#heading(level: 1)[Feature Tree with Parameter Bindings]
+
+This section demonstrates the new parameter binding visualization in feature trees.
+Each selected feature displays its configured parameter values inline.
+
+== Starter Configuration
+
+#set-active-config("CFG-STARTER")
+#feature-tree(root: "ROOT")
+
+#pagebreak()
+
+== Professional Configuration
+
+#set-active-config("CFG-PROFESSIONAL")
+#feature-tree(root: "ROOT")
+
+#pagebreak()
+
+== Enterprise Configuration
+
+#set-active-config("CFG-ENTERPRISE")
+#feature-tree(root: "ROOT")
+
+#pagebreak()
+
+== Feature Tree without Parameter Bindings (Enterprise)
+
+This shows the same tree with parameter display disabled:
+
+#feature-tree(root: "ROOT", config: "CFG-ENTERPRISE", show-parameters: false)
+
+// ==============================================================================
 // Configuration Comparison
 // ==============================================================================
 

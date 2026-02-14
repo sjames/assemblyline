@@ -9,6 +9,12 @@
 #let __links         = state("asln-links", ())        // Individual link records
 #let __active-config = state("asln-active-config", none)
 #let __tree-counter = state("asln-tree-counter", 0)
+#let __validation-options = state("asln-validation-options", (
+  sat: true,          // SAT-based traceability validation (can be slow for large models)
+  links: true,        // Link target existence validation
+  parameters: true,   // Parameter binding validation
+  interfaces: true,   // Interface version/reference validation
+))
 
 // Extract trailing content block safely
 #let __body(args) = {
@@ -63,9 +69,60 @@
   }
 }
 
+/// Configure validation options for the specification
+///
+/// Allows selective enabling/disabling of validation types. Useful for large models
+/// where SAT validation may be time-consuming.
+///
+/// Parameters:
+/// - sat: Enable SAT-based traceability validation (default: true)
+/// - links: Enable link target existence validation (default: true)
+/// - parameters: Enable parameter binding validation (default: true)
+/// - interfaces: Enable interface version/reference validation (default: true)
+///
+/// Command-line override:
+/// - Use `--input enable-sat=false` to disable SAT validation from command line
+/// - Use `--input enable-links=false` to disable link validation
+/// - Use `--input enable-parameters=false` to disable parameter validation
+/// - Use `--input enable-interfaces=false` to disable interface validation
+///
+/// Example:
+/// ```typst
+/// // Disable SAT validation for large models
+/// #set-validation-options(sat: false)
+///
+/// // Support command-line override
+/// #set-validation-options(
+///   sat: sys.inputs.at("enable-sat", default: "true") == "true",
+///   links: true,
+///   parameters: true,
+///   interfaces: true
+/// )
+/// ```
+#let set-validation-options(
+  sat: true,
+  links: true,
+  parameters: true,
+  interfaces: true
+) = {
+  __validation-options.update(opts => (
+    sat: sat,
+    links: links,
+    parameters: parameters,
+    interfaces: interfaces,
+  ))
+}
+
 // Validate all links at document end
 // Call this function after all elements are registered to check link integrity
+// Respects validation options set by #set-validation-options()
 #let validate-links() = context {
+  // Check if link validation is enabled
+  let opts = __validation-options.get()
+  if not opts.links {
+    return
+  }
+
   let registry = __registry.get()
   let all-links = __links.get()
   let violations = ()
@@ -99,7 +156,14 @@
 
 // Validate parameter bindings for a configuration
 // Call this function after all elements are registered to check parameter integrity
+// Respects validation options set by #set-validation-options()
 #let validate-parameter-bindings(config-id) = context {
+  // Check if parameter validation is enabled
+  let opts = __validation-options.get()
+  if not opts.parameters {
+    return
+  }
+
   let registry = __registry.get()
   let config-key = "CONFIG:" + config-id
   let violations = ()
@@ -210,7 +274,14 @@
 
 // Validate interface references in blocks
 // Call this function after all elements are registered to check interface integrity
+// Respects validation options set by #set-validation-options()
 #let validate-interface-references() = context {
+  // Check if interface validation is enabled
+  let opts = __validation-options.get()
+  if not opts.interfaces {
+    return
+  }
+
   let registry = __registry.get()
   let violations = ()
 
@@ -334,7 +405,14 @@
 
 // Validate interface version compatibility
 // Call this function after all elements are registered
+// Respects validation options set by #set-validation-options()
 #let validate-interface-versions() = context {
+  // Check if interface validation is enabled
+  let opts = __validation-options.get()
+  if not opts.interfaces {
+    return
+  }
+
   let registry = __registry.get()
   let violations = ()
 
@@ -750,7 +828,9 @@
 
 // Render a feature tree node recursively
 // tree-prefix: unique identifier for this tree instance to create unique labels
-#let __render-tree-node(feature, registry, selected, depth, tree-prefix) = {
+// bindings: configuration bindings for parameter values
+// show-parameters: whether to display parameter bindings
+#let __render-tree-node(feature, registry, selected, depth, tree-prefix, bindings: (:), show-parameters: true) = {
   let indent = "  " * depth
   let is-selected = selected.contains(feature.id)
   let no-config = selected.len() == 0  // No configuration active
@@ -809,19 +889,101 @@
   // Render this node with constraints and label
   [#indent#node-content#constraint-display#label(feature-label)\ ]
 
+  // Render parameter bindings as bullet list if they exist and should be shown
+  if show-parameters and is-selected and feature.id in bindings {
+    let feature-bindings = bindings.at(feature.id)
+    let feature-params = feature.at("parameters", default: none)
+
+    if feature-bindings != (:) and feature-params != none {
+      let param-indent = "  " * depth + "  "
+
+      for (param-name, param-value) in feature-bindings {
+        // Get parameter schema to extract metadata
+        let param-schema = feature-params.at(param-name, default: none)
+        let unit = if param-schema != none {
+          param-schema.at("unit", default: none)
+        } else {
+          none
+        }
+
+        let param-type = if param-schema != none {
+          param-schema.at("type", default: none)
+        } else {
+          none
+        }
+
+        let default-value = if param-schema != none {
+          param-schema.at("default", default: none)
+        } else {
+          none
+        }
+
+        // Format the binding value
+        let value-str = if type(param-value) == bool {
+          if param-value { "true" } else { "false" }
+        } else {
+          str(param-value)
+        }
+
+        let value-display = if unit != none {
+          value-str + " " + unit
+        } else {
+          value-str
+        }
+
+        // Build metadata string (range/values and default)
+        let metadata-parts = ()
+
+        // Add range or values depending on type
+        if param-type == "Integer" and param-schema != none {
+          let range = param-schema.at("range", default: none)
+          if range != none {
+            let (min-val, max-val) = range
+            metadata-parts.push("range: " + str(min-val) + "-" + str(max-val))
+          }
+        } else if param-type == "Enum" and param-schema != none {
+          let values = param-schema.at("values", default: none)
+          if values != none {
+            metadata-parts.push("values: " + values.join(", "))
+          }
+        }
+
+        // Add default value
+        if default-value != none {
+          let default-str = if type(default-value) == bool {
+            if default-value { "true" } else { "false" }
+          } else {
+            str(default-value)
+          }
+          metadata-parts.push("default: " + default-str)
+        }
+
+        // Use black color for parameter name and value, light grey for metadata
+        if metadata-parts.len() > 0 {
+          let metadata-display = " (" + metadata-parts.join(", ") + ")"
+          [#param-indent#text(size: 0.75em, fill: black)[├ #param-name: #value-display]#text(size: 0.75em, fill: luma(130))[#metadata-display]\ ]
+        } else {
+          [#param-indent#text(size: 0.75em, fill: black)[├ #param-name: #value-display]\ ]
+        }
+      }
+    }
+  }
+
   // Find and render children
   let children = registry.pairs()
     .filter(p => p.last().type == "feature" and p.last().parent == feature.id)
     .map(p => p.last())
 
   for child in children {
-    __render-tree-node(child, registry, selected, depth + 1, tree-prefix)
+    __render-tree-node(child, registry, selected, depth + 1, tree-prefix, bindings: bindings, show-parameters: show-parameters)
   }
 }
 
 // Detailed tree node renderer that includes feature body/description
 // tree-prefix: unique identifier for this tree instance to create unique labels
-#let __render-tree-node-detailed(feature, registry, selected, depth, show-descriptions: true, max-depth: none, tree-prefix) = {
+// bindings: configuration bindings for parameter values
+// show-parameters: whether to display parameter bindings
+#let __render-tree-node-detailed(feature, registry, selected, depth, show-descriptions: true, max-depth: none, tree-prefix, bindings: (:), show-parameters: true) = {
   let indent = "  " * depth
   let is-selected = selected.contains(feature.id)
   let no-config = selected.len() == 0  // No configuration active
@@ -894,6 +1056,92 @@
     [#desc-indent\ ]
   }
 
+  // Render parameter bindings as bullet list if they exist and should be shown
+  if show-parameters and is-selected and feature.id in bindings {
+    let feature-bindings = bindings.at(feature.id)
+    let feature-params = feature.at("parameters", default: none)
+
+    if feature-bindings != (:) and feature-params != none {
+      let param-indent = "  " * depth + "│ "
+
+      // Parameter header
+      [#param-indent#text(size: 0.8em, fill: black, weight: "bold")[Parameters:]\ ]
+
+      for (param-name, param-value) in feature-bindings {
+        // Get parameter schema to extract metadata
+        let param-schema = feature-params.at(param-name, default: none)
+        let unit = if param-schema != none {
+          param-schema.at("unit", default: none)
+        } else {
+          none
+        }
+
+        let param-type = if param-schema != none {
+          param-schema.at("type", default: none)
+        } else {
+          none
+        }
+
+        let default-value = if param-schema != none {
+          param-schema.at("default", default: none)
+        } else {
+          none
+        }
+
+        // Format the binding value
+        let value-str = if type(param-value) == bool {
+          if param-value { "true" } else { "false" }
+        } else {
+          str(param-value)
+        }
+
+        let value-display = if unit != none {
+          value-str + " " + unit
+        } else {
+          value-str
+        }
+
+        // Build metadata string (range/values and default)
+        let metadata-parts = ()
+
+        // Add range or values depending on type
+        if param-type == "Integer" and param-schema != none {
+          let range = param-schema.at("range", default: none)
+          if range != none {
+            let (min-val, max-val) = range
+            metadata-parts.push("range: " + str(min-val) + "-" + str(max-val))
+          }
+        } else if param-type == "Enum" and param-schema != none {
+          let values = param-schema.at("values", default: none)
+          if values != none {
+            metadata-parts.push("values: " + values.join(", "))
+          }
+        }
+
+        // Add default value
+        if default-value != none {
+          let default-str = if type(default-value) == bool {
+            if default-value { "true" } else { "false" }
+          } else {
+            str(default-value)
+          }
+          metadata-parts.push("default: " + default-str)
+        }
+
+        // Use black color for parameter name and value, light grey for metadata
+        if metadata-parts.len() > 0 {
+          let metadata-display = " (" + metadata-parts.join(", ") + ")"
+          [#param-indent#text(size: 0.75em, fill: black)[  • #param-name: #value-display]#text(size: 0.75em, fill: luma(130))[#metadata-display]\ ]
+        } else {
+          [#param-indent#text(size: 0.75em, fill: black)[  • #param-name: #value-display]\ ]
+        }
+      }
+
+      // Add spacing line after parameters
+      [#param-indent\ ]
+    }
+  }
+
   // Check if we should render children (depth limit)
   let should-render-children = if max-depth == none {
     true
@@ -908,7 +1156,7 @@
       .map(p => p.last())
 
     for child in children {
-      __render-tree-node-detailed(child, registry, selected, depth + 1, show-descriptions: show-descriptions, max-depth: max-depth, tree-prefix)
+      __render-tree-node-detailed(child, registry, selected, depth + 1, show-descriptions: show-descriptions, max-depth: max-depth, tree-prefix, bindings: bindings, show-parameters: show-parameters)
     }
   } else if max-depth != none {
     // Indicate that there are hidden children
@@ -1137,7 +1385,11 @@
 }
 
 // #feature-tree: Render hierarchical feature model with configuration
-#let feature-tree(root: "ROOT", config: none) = context {
+// Parameters:
+//   root: Starting feature ID (default: "ROOT")
+//   config: Configuration ID to use (default: uses active config)
+//   show-parameters: Whether to display parameter bindings (default: true)
+#let feature-tree(root: "ROOT", config: none, show-parameters: true) = context {
   // Get registry from state
   let registry = __registry.get()
 
@@ -1148,11 +1400,17 @@
     __active-config.get()
   }
 
-  // Get selected features from configuration
+  // Get selected features and bindings from configuration
   let selected = if cfg-id != none and ("CONFIG:" + cfg-id) in registry {
     registry.at("CONFIG:" + cfg-id).selected
   } else {
     ()
+  }
+
+  let bindings = if cfg-id != none and ("CONFIG:" + cfg-id) in registry {
+    registry.at("CONFIG:" + cfg-id).at("bindings", default: (:))
+  } else {
+    (:)
   }
 
   // Get root feature
@@ -1194,7 +1452,7 @@
 
   // Render tree content (breakable across pages)
   text(font: "Courier New", size: 0.9em)[
-    #__render-tree-node(root-feature, registry, selected, 0, tree-prefix)
+    #__render-tree-node(root-feature, registry, selected, 0, tree-prefix, bindings: bindings, show-parameters: show-parameters)
   ]
 
   v(0.5em)
@@ -1219,8 +1477,9 @@
 //   root: Starting feature ID (default: "ROOT")
 //   config: Configuration ID to highlight selected features (default: uses active config)
 //   show-descriptions: Whether to show feature descriptions (default: true)
+//   show-parameters: Whether to display parameter bindings (default: true)
 //   max-depth: Maximum depth to render (none = unlimited, 0 = root only, 1 = root + children, etc.)
-#let feature-tree-detailed(root: "ROOT", config: none, show-descriptions: true, max-depth: none) = context {
+#let feature-tree-detailed(root: "ROOT", config: none, show-descriptions: true, show-parameters: true, max-depth: none) = context {
   // Get registry from state
   let registry = __registry.get()
 
@@ -1231,11 +1490,17 @@
     __active-config.get()
   }
 
-  // Get selected features from configuration
+  // Get selected features and bindings from configuration
   let selected = if cfg-id != none and ("CONFIG:" + cfg-id) in registry {
     registry.at("CONFIG:" + cfg-id).selected
   } else {
     ()
+  }
+
+  let bindings = if cfg-id != none and ("CONFIG:" + cfg-id) in registry {
+    registry.at("CONFIG:" + cfg-id).at("bindings", default: (:))
+  } else {
+    (:)
   }
 
   // Get root feature
@@ -1266,6 +1531,7 @@
       [*Starting Feature:*], [#root],
       [*Max Depth:*], [#if max-depth == none [Unlimited] else [#max-depth]],
       [*Descriptions:*], [#if show-descriptions [Shown] else [Hidden]],
+      [*Parameters:*], [#if show-parameters [Shown] else [Hidden]],
       ..if cfg-id != none {
         (
           [*Configuration:*], [#cfg-id],
@@ -1288,7 +1554,7 @@
 
   // Render tree content (breakable across pages)
   text(font: "Courier New", size: 0.9em)[
-    #__render-tree-node-detailed(root-feature, registry, selected, 0, show-descriptions: show-descriptions, max-depth: max-depth, tree-prefix)
+    #__render-tree-node-detailed(root-feature, registry, selected, 0, show-descriptions: show-descriptions, max-depth: max-depth, tree-prefix, bindings: bindings, show-parameters: show-parameters)
   ]
 
   v(0.5em)
@@ -2250,13 +2516,43 @@
 #import "feature-diagram.typ": feature-model-diagram
 
 // Import validation module with plugin support
+// Import with prefixes to allow wrapping with validation options
 #import "validation.typ": (
   plugin-available,
-  validate-traceability,
-  validate-specification,
+  validate-traceability as __validate-traceability-wasm,
+  validate-specification as __validate-specification-wasm,
   validation-status,
   format-validation-errors,
 )
+
+// Create wrapper functions that respect validation options
+#let validate-traceability(registry, links, active-config: none) = context {
+  let opts = __validation-options.get()
+  if not opts.sat {
+    // Return a skipped result
+    return (
+      passed: true,
+      total_elements: registry.len(),
+      message: "SAT validation skipped (disabled in validation options)",
+      validation_mode: "basic"
+    )
+  }
+  __validate-traceability-wasm(registry, links, active-config: active-config)
+}
+
+#let validate-specification(registry: (:), links: (), active-config: none) = context {
+  let opts = __validation-options.get()
+  if not opts.sat {
+    // Return a skipped result
+    return (
+      passed: true,
+      total_elements: registry.len(),
+      message: "SAT validation skipped (disabled in validation options). Basic validations (links, parameters, interfaces) were performed separately.",
+      validation_mode: "basic"
+    )
+  }
+  __validate-specification-wasm(registry: registry, links: links, active-config: active-config)
+}
 
 // Import and initialize parameter visualization module
 #import "parameter-visualization.typ": make-parameter-visualizations

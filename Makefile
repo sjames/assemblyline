@@ -15,7 +15,7 @@ help:
 	@echo "Test Coverage:"
 	@echo "  - 27 Rust unit tests (SAT solver + feature validation + parameters + constraints)"
 	@echo "  - 8 Typst integration tests"
-	@echo "  - 8 Example compilation tests (including feature visualizations)"
+	@echo "  - 10 Example compilation tests (including feature visualizations + parameter bindings)"
 	@echo "  - 1 Parameter validation test (negative test)"
 	@echo ""
 
@@ -55,7 +55,7 @@ test:
 	done
 	@echo ""
 	@echo "3. Running example compilation tests..."
-	@for example in examples/sat-validation-example.typ examples/parameters-example.typ examples/test-json-export.typ examples/parameter-visualization-demo.typ examples/feature-subtree-demo.typ examples/feature-tree-detailed-example.typ examples/feature-tree-advanced-demo.typ examples/full-model/feature-model-visualization-demo.typ; do \
+	@for example in examples/sat-validation-example.typ examples/parameters-example.typ examples/test-json-export.typ examples/parameter-visualization-demo.typ examples/feature-subtree-demo.typ examples/feature-tree-detailed-example.typ examples/feature-tree-advanced-demo.typ examples/test-validation-options.typ examples/test-feature-tree-with-parameters.typ examples/full-model/feature-model-visualization-demo.typ; do \
 		echo "  ✓ Compiling $$example..."; \
 		typst compile --root . "$$example" > /dev/null 2>&1 || { echo "  ✗ Failed: $$example"; exit 1; }; \
 	done
