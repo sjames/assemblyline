@@ -301,16 +301,43 @@ This section documents the mandatory traceability relationships and validation r
 <!-- Add structural traceability rules here -->
 
 ### Configuration Management
-- **Define configurations**: `#config("CFG-EU", selected: ("F-AUTH", "F-PUSH", ...))`
+- **Define configurations**: `#config("CFG-EU", selected: ("F-AUTH", "F-PUSH", ...), bindings: (...))`
+  - `selected`: Array of selected concrete feature IDs
+  - `bindings`: Dictionary mapping feature IDs to parameter values
+  - Example: `bindings: ("F-CACHE": (cache_size: 512, eviction_policy: "LFU"))`
 - **Activate configuration**: `#set-active-config("CFG-EU")`
-- **Visualize**: `#feature-tree(root: "ROOT", config: "CFG-EU")` shows selected features in green
+- **Visualize**: `#feature-tree(root: "ROOT", config: "CFG-EU")` shows selected features with depth-based colors
+  - **NEW:** Parameter bindings are displayed as bullet list for each selected feature
 - **Validation**: Feature selection must respect XOR/OR constraints
+- **Parameter validation**: `#validate-parameter-bindings("CFG-EU")` checks type, range, and enum constraints
 
 ### Queries and Reports
-- **`#feature-tree(root: "ROOT", config: "CFG-EU")`** - Visualize feature hierarchy with configuration
+- **`#feature-tree(root: "ROOT", config: "CFG-EU", show-parameters: true)`** - Visualize feature hierarchy with configuration
   - Shows mandatory/optional/XOR/OR structure
-  - Highlights selected features
+  - Highlights selected features with depth-based color coding
   - Displays concrete vs. abstract features
+  - **NEW: Shows parameter bindings as bullet list** for selected features (enabled by default)
+    - Each parameter displayed on its own line with metadata: `├ param_name: value (range/values, default)`
+    - Parameter name and value in **black**, metadata in **light grey** for visual distinction
+    - Includes units when defined (e.g., `cache_size: 512 MB`)
+    - Shows valid range for Integer parameters
+    - Shows allowed values for Enum parameters
+    - Shows default value for all parameter types
+    - Can be disabled with `show-parameters: false`
+    - Example:
+      ```
+      ● F-CACHE – Cache System
+        ├ cache_size: 512 MB (range: 16-2048, default: 256)
+        ├ eviction_policy: LFU (values: LRU, FIFO, LFU, ARC, default: LRU)
+        ├ enable_compression: true (default: false)
+      ```
+
+- **`#feature-tree-detailed(root: "ROOT", config: "CFG-EU", show-descriptions: true, show-parameters: true, max-depth: none)`** - Detailed feature tree with descriptions
+  - All features from `#feature-tree()` plus:
+  - Shows feature descriptions/body text under each node
+  - Supports depth limiting with `max-depth` parameter
+  - Parameter bindings shown with "Parameters:" header followed by bullet list
+  - Parameters appear after description, before children
 
 - **`#use-case-section(title: "...")`** - Render all use cases with traceability
 - **`#block-definition-section(title: "...")`** - Render all SysML blocks

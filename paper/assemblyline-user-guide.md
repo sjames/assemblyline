@@ -939,6 +939,26 @@ Configurations bind specific values to feature parameters:
 - Integer values must be within declared range
 - Enum values must be in declared values list
 
+**Visualization in feature tree:**
+
+Parameter bindings are displayed as a bullet list below each selected feature:
+
+```
+● F-CACHE – Cache System
+  ├ cache_size: 64 MB (range: 16-2048, default: 128)
+● F-COMPRESS – Data Compression
+  ├ enable_compression: true (default: false)
+● F-LOG – Logging System
+  ├ log_level: WARN (values: DEBUG, INFO, WARN, ERROR, default: INFO)
+```
+
+Each parameter shows:
+- **Current value** (in black) with unit if defined
+- **Valid range** (for Integer) or **allowed values** (for Enum)
+- **Default value** for comparison
+
+Metadata appears in light grey to distinguish from the configured value.
+
 ### Feature Constraints
 
 **Feature constraints** express dependencies and conflicts between features. They appear next to each feature in the feature tree visualization.
@@ -2032,29 +2052,246 @@ The built-in validator enforces the **Fundamental Modeling Rules** described ear
 
 ---
 
+## Validation Options
+
+AssemblyLine provides flexible validation control to balance thoroughness with compilation speed, especially important for large models.
+
+### Available Validation Types
+
+AssemblyLine performs four types of validation:
+
+1. **SAT Validation** (`sat`) - Boolean satisfiability-based traceability validation
+   - Most comprehensive validation
+   - Enforces all 7 fundamental modeling rules
+   - Can be time-consuming for large models (100+ features)
+   - **Default: enabled**
+
+2. **Link Validation** (`links`) - Verifies all link targets exist
+   - Fast, lightweight validation
+   - Catches broken references
+   - Always recommended
+   - **Default: enabled**
+
+3. **Parameter Validation** (`parameters`) - Type checking and range validation
+   - Validates parameter bindings against schemas
+   - Type checking (Integer, Boolean, Enum)
+   - Range validation for numeric parameters
+   - **Default: enabled**
+
+4. **Interface Validation** (`interfaces`) - Interface reference validation
+   - Validates interface references in blocks
+   - Version compatibility checking
+   - **Default: enabled**
+
+### Controlling Validation
+
+Use `#set-validation-options()` to configure which validations run:
+
+```typst
+// Disable SAT validation for faster compilation during development
+#set-validation-options(sat: false)
+
+// Disable all validations (not recommended)
+#set-validation-options(
+  sat: false,
+  links: false,
+  parameters: false,
+  interfaces: false
+)
+
+// Re-enable validations for final build
+#set-validation-options(sat: true, links: true, parameters: true, interfaces: true)
+```
+
+### Command-Line Override
+
+You can control validation via command-line flags without modifying source files:
+
+```bash
+# Disable SAT validation
+typst compile --input enable-sat=false main.typ
+
+# Disable multiple validations
+typst compile --input enable-sat=false --input enable-links=false main.typ
+
+# Enable all (default behavior)
+typst compile main.typ
+```
+
+To support command-line overrides in your document:
+
+```typst
+#set-validation-options(
+  sat: sys.inputs.at("enable-sat", default: "true") == "true",
+  links: sys.inputs.at("enable-links", default: "true") == "true",
+  parameters: sys.inputs.at("enable-parameters", default: "true") == "true",
+  interfaces: sys.inputs.at("enable-interfaces", default: "true") == "true"
+)
+```
+
+### Validation Workflow
+
+**For large models (100+ features):**
+
+1. **During development** - Disable SAT for faster iterations:
+   ```typst
+   #set-validation-options(sat: false)
+   ```
+
+2. **Before committing** - Enable SAT for final verification:
+   ```typst
+   #set-validation-options(sat: true)
+   ```
+
+3. **In CI/CD** - Always run full validation:
+   ```bash
+   typst compile main.typ  # All validations enabled by default
+   ```
+
+**For small-medium models (< 100 features):**
+
+Keep all validations enabled - SAT validation is fast enough:
+
+```typst
+// No need to change defaults - all validations are quick
+```
+
+### Validation Status Messages
+
+When SAT validation is disabled, the validation report shows:
+
+```
+Status: ✓ PASSED
+Total Elements: 42
+Message: SAT validation skipped (disabled in validation options).
+         Basic validations (links, parameters, interfaces) were performed separately.
+Validation Mode: basic
+```
+
+When SAT validation is enabled:
+
+```
+Status: ✓ PASSED
+Total Elements: 42
+Message: All traceability rules validated successfully
+Validation Mode: full
+```
+
+### Best Practices
+
+1. **Always keep `links`, `parameters`, and `interfaces` enabled**
+   - These validations are fast and catch common errors
+   - Disabling them can lead to confusing compilation errors
+
+2. **Use SAT validation selectively for large models**
+   - Disable during rapid development iterations
+   - Enable for pull requests and releases
+   - Always enable in CI/CD pipelines
+
+3. **Document your validation strategy**
+   - Add comments explaining why validations are disabled
+   - Use command-line overrides for temporary disabling
+   - Keep source files with validations enabled by default
+
+4. **Monitor compilation time**
+   - If `typst compile` takes > 10 seconds, consider disabling SAT
+   - Profile your build to identify bottlenecks
+   - Large models may benefit from incremental validation
+
+### Example: Conditional Validation
+
+```typst
+// In main.typ
+
+// Support both development and CI modes
+#let dev-mode = sys.inputs.at("dev", default: "false") == "true"
+
+#set-validation-options(
+  sat: not dev-mode,        // Disable SAT in dev mode
+  links: true,              // Always validate links
+  parameters: true,         // Always validate parameters
+  interfaces: true          // Always validate interfaces
+)
+
+// Rest of your specification...
+```
+
+Usage:
+
+```bash
+# Development build (fast, basic validation)
+typst compile --input dev=true main.typ
+
+# Production build (slow, full validation)
+typst compile main.typ
+```
+
+### See Also
+
+- **Fundamental Modeling Rules** - Understanding what SAT validation checks
+- **Traceability Validation** - How validation works
+- **examples/test-validation-options.typ** - Complete working example
+
+---
+
 ## Visualization & Reporting
 
 AssemblyLine provides comprehensive visualization and reporting functions for generating documentation and traceability reports.
 
 ### Feature Model Visualization
 
-**`#feature-tree(root, config, level)`** - Renders hierarchical feature model:
+**`#feature-tree(root, config, show-parameters)`** - Renders hierarchical feature model:
 
 ```typst
 // Basic feature tree
 #feature-tree(root: "ROOT")
 
-// With configuration highlighting
+// With configuration highlighting and parameter bindings
 #feature-tree(root: "ROOT", config: "CFG-PREMIUM")
+
+// Hide parameter bindings
+#feature-tree(root: "ROOT", config: "CFG-PREMIUM", show-parameters: false)
 ```
 
 **Symbols:**
 - `●` = Mandatory feature
 - `⊕` = XOR group (exactly one child)
 - `⊙` = OR group (at least one child)
-- **Bold green** = Selected in configuration
+- **Bold with depth colors** = Selected in configuration (L0=blue, L1=cyan, L2=green, etc.)
 - **Gray** = Not selected
-- Dashed border = Abstract feature
+
+**Parameter Display (new):**
+
+When `show-parameters: true` (default), selected features display their configured parameter values as a bullet list:
+
+```
+● F-CACHE – Cache System
+  ├ cache_size: 512 MB (range: 16-2048, default: 256)
+  ├ eviction_policy: LFU (values: LRU, FIFO, LFU, ARC, default: LRU)
+  ├ enable_compression: true (default: false)
+```
+
+- Parameter name and value in **black**
+- Metadata (range/values/default) in **light grey**
+- Provides full context: current value, valid range/values, and default
+
+**`#feature-tree-detailed(root, config, show-descriptions, show-parameters, max-depth)`** - Detailed feature tree with descriptions:
+
+```typst
+// Full detail with descriptions and parameters
+#feature-tree-detailed(root: "ROOT", config: "CFG-PREMIUM")
+
+// Control visibility
+#feature-tree-detailed(
+  root: "ROOT",
+  config: "CFG-PREMIUM",
+  show-descriptions: true,
+  show-parameters: true,
+  max-depth: 3
+)
+```
+
+Parameters appear after feature descriptions with a "Parameters:" header followed by bullet list.
 
 **`#feature-tree-with-requirements(root, config)`** - Shows feature hierarchy with linked requirements as cards
 
