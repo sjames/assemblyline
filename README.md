@@ -1,3 +1,5 @@
+# This project is deprecated. See https://github.com/sjames/syscribe instead
+
 # AssemblyLine Modelling Language
 
 A text-based modelling language for systems engineering and product-line engineering, implemented as a Typst library.
